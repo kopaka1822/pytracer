@@ -3,6 +3,8 @@ from hit import Hit
 from plane import Plane
 
 class Ray:
+    # static variables
+    tangent_scale = 0.14
 
     def __init__(self, P: np.ndarray, D: np.ndarray, dP: np.ndarray | None = None, dD: np.ndarray | None = None):
         self._P = np.asarray(P, dtype=float)
@@ -12,10 +14,10 @@ class Ray:
 
         self._dP = np.zeros(2) if dP is None else np.asarray(dP, dtype=float)
         # tangent based perpedicular vector
-        Right = 0.14 * np.array([-D[1], D[0]])
+        self._Right = Ray.tangent_scale * np.array([-D[1], D[0]])
         # dD = (dot(d, d) * Right - dot(d, Right) * d) / (dot(d, d) ** 1.5)
         # here: let d = D
-        self._dD = (np.dot(D, D) * Right - np.dot(D, Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)
+        self._dD = (np.dot(D, D) * self._Right - np.dot(D, self._Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)
 
     # --- Getter ---
     def P(self) -> np.ndarray:
@@ -29,6 +31,11 @@ class Ray:
 
     def dD(self) -> np.ndarray:
         return self._dD
+
+    # shift based on ray differential right vector
+    def shiftS(self, s: float) -> "Ray":
+        newD = self._D + s * self._Right
+        return Ray(self._P, newD, self._dP, self._dD)
 
     def calcHit(self, plane: Plane, forceIntersect: bool = False) -> Hit | None:
         N = plane.N()

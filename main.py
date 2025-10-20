@@ -72,7 +72,7 @@ draw_differentials = True
 draw_guess = True
 guess_strategies = ["same direction", "initial intersection"]
 guess_strategy = 0  # index into guess_strategies
-predict_strategies = ["adjust dD", "adjust dP"]
+predict_strategies = ["adjust dD", "adjust dP", "adjust D"]
 predict_strategy = 0  # index into predict_strategies
 
 # ---------------------------------------------------------------
@@ -169,6 +169,9 @@ def draw_scene():
     if predict_strategy == 1:
         ray2TempTransfer = ray2.transfer(ray2.calcHit(hits[0].Plane(), forceIntersect=True))
         newDir = ray2TempTransfer.P() + lastS * ray2TempTransfer.dP() - C0
+    if predict_strategy == 2:
+        ray2TempShift = initial_ray2.shiftS(lastS)
+        newDir = ray2TempShift.D()
     newDir /= np.linalg.norm(newDir)
     ray2 = Ray(C0, newDir)
     # draw predicted ray2 path
@@ -191,16 +194,17 @@ ax = fig.add_axes([0.07, 0.1, 0.6, 0.8])  # main plot area (left)
 
 # Slider panel
 ax_sliders = [
-    fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # C1.x
-    fig.add_axes([0.75, 0.70, 0.2, 0.03]),  # C1.y
-    fig.add_axes([0.75, 0.65, 0.2, 0.03]),  # C1 angle
-    fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # C0.x
-    fig.add_axes([0.75, 0.50, 0.2, 0.03]),  # C0.y
-    fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # max bounces
-    fig.add_axes([0.75, 0.35, 0.2, 0.03]),  # draw differentials
-    fig.add_axes([0.75, 0.30, 0.2, 0.03]),  # draw guess,
-    fig.add_axes([0.75, 0.15, 0.2, 0.1]),  # guess strategy radio buttons
-    fig.add_axes([0.75, 0.05, 0.2, 0.1]),  # predict strategy radio buttons
+    fig.add_axes([0.75, 0.95, 0.2, 0.03]),  # C1.x (moved up)
+    fig.add_axes([0.75, 0.90, 0.2, 0.03]),  # C1.y
+    fig.add_axes([0.75, 0.85, 0.2, 0.03]),  # C1 angle
+    fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # C0.x
+    fig.add_axes([0.75, 0.70, 0.2, 0.03]),  # C0.y
+    fig.add_axes([0.75, 0.65, 0.2, 0.03]),  # Ray.tangent_scale
+    fig.add_axes([0.75, 0.60, 0.2, 0.03]),  # max bounces
+    fig.add_axes([0.75, 0.50, 0.2, 0.03]),  # draw differentials
+    fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
+    fig.add_axes([0.75, 0.30, 0.2, 0.1]),   # guess strategy radio buttons
+    fig.add_axes([0.75, 0.20, 0.2, 0.1]),   # predict strategy radio buttons
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -208,14 +212,15 @@ slider_C1y = Slider(ax_sliders[1], "C1.y", -10.0, 10.0, valinit=C1[1])
 slider_C1a = Slider(ax_sliders[2], "C1.angle", -180.0, 180.0, valinit=C1_angle)
 slider_C0x = Slider(ax_sliders[3], "C0.x", -10.0, 10.0, valinit=C0[0])
 slider_C0y = Slider(ax_sliders[4], "C0.y", -10.0, 10.0, valinit=C0[1])
+slider_tangent_scale = Slider(ax_sliders[5], "Ray.tangent_scale", 0.001, 0.5, valinit=Ray.tangent_scale)
 # integer slider for max bounces
-slider_max_bounces = Slider(ax_sliders[5], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
+slider_max_bounces = Slider(ax_sliders[6], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
 # checkbox for draw differentials and guess
-checkbox_draw_differentials = CheckButtons(ax_sliders[6], ["Draw Differentials"], [draw_differentials])
-checkbox_draw_guess = CheckButtons(ax_sliders[7], ["Draw Guess"], [draw_guess])
+checkbox_draw_differentials = CheckButtons(ax_sliders[7], ["Draw Differentials"], [draw_differentials])
+checkbox_draw_guess = CheckButtons(ax_sliders[8], ["Draw Guess"], [draw_guess])
 # radio buttons for guess strategy
-radio_guess_strategy = RadioButtons(ax_sliders[8], guess_strategies, active=guess_strategy)
-radio_predict_strategy = RadioButtons(ax_sliders[9], predict_strategies, active=predict_strategy)
+radio_guess_strategy = RadioButtons(ax_sliders[9], guess_strategies, active=guess_strategy)
+radio_predict_strategy = RadioButtons(ax_sliders[10], predict_strategies, active=predict_strategy)
 
 # ---------------------------------------------------------------
 # Slider callbacks
@@ -233,9 +238,10 @@ def update(val):
     draw_guess = checkbox_draw_guess.get_status()[0]
     guess_strategy = guess_strategies.index(radio_guess_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
+    Ray.tangent_scale = slider_tangent_scale.val
     draw_scene()
 
-for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces]:
+for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale]:
     s.on_changed(update)
 
 for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy]:
