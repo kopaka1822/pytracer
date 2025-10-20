@@ -72,7 +72,7 @@ draw_differentials = True
 draw_guess = True
 guess_strategies = ["same direction", "initial intersection"]
 guess_strategy = 0  # index into guess_strategies
-predict_strategies = ["adjust dD", "adjust dP", "adjust D"]
+predict_strategies = ["adjust dD", "adjust dP", "adjust D", "ray length"]
 predict_strategy = 0  # index into predict_strategies
 
 # ---------------------------------------------------------------
@@ -120,6 +120,7 @@ def draw_scene():
     ray2 = initial_ray2
     lastS = 0.0 # last solution for ray2 differential
     hits = []
+    rayLength = 0.0
     # main loop
     for i in range(max_bounces):
         # Find the closest intersection
@@ -127,6 +128,7 @@ def draw_scene():
         if hit is None:
             break
         hits.append(hit)
+        rayLength += hit.T()
 
         if i == 0 and guess_strategy == 1: # initial intersection
             initial_ray2 = Ray(C0, hit.P() - C0)
@@ -172,6 +174,8 @@ def draw_scene():
     if predict_strategy == 2:
         ray2TempShift = initial_ray2.shiftS(lastS)
         newDir = ray2TempShift.D()
+    if predict_strategy == 3:
+        newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
     ray2 = Ray(C0, newDir)
     # draw predicted ray2 path
