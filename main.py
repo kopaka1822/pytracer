@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+from matplotlib.widgets import CheckButtons, Slider, RadioButtons
 from plane import Plane
 from ray import Ray
 from hit import Hit
@@ -9,7 +9,7 @@ from hit import Hit
 # Scene setup: finite line segments
 # ---------------------------------------------------------------
 
-planes = [
+reflection_scene = [
     Plane([-10, -5], [10, -5]),       # bottom
     Plane([-8, -3], [-3, -1]),        # slanted left
     Plane([3, -1], [8, -3]),          # slanted right
@@ -24,6 +24,21 @@ planes = [
     Plane([10, 10], [10, -10]),
     Plane([10, -10], [-10, -10]),
 ]
+
+refraction_scene = [
+
+    # two planes in center for glass
+    Plane([-10, 2], [10, 2], ior=1.5),
+    Plane([10, 0], [-10, 0], ior=1.5),
+
+    # box around -10, 10
+    Plane([-10, -10], [-10, 10]),
+    Plane([-10, 10], [10, 10]),
+    Plane([10, 10], [10, -10]),
+    Plane([10, -10], [-10, -10]),
+]
+
+planes = refraction_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -53,6 +68,10 @@ C0 = np.array([-8.6, 5.0])
 C1 = np.array([-9.2, 4.5])
 C1_angle = -46.8  # in degrees
 max_bounces = 3
+draw_differentials = True
+draw_guess = True
+guess_strategies = ["same direction", "initial intersection"]
+guess_strategy = 0  # index into guess_strategies
 
 # ---------------------------------------------------------------
 # Draw function
@@ -95,7 +114,8 @@ def draw_scene():
 
     prevPlane = None
     ray = Ray(C1, dir)
-    ray2 = Ray(C0, dir)  # corresponding ray from C0
+    initial_ray2 = Ray(C0, dir)
+    ray2 = initial_ray2
     lastS = 0.0 # last solution for ray2 differential
     hits = []
     # main loop
@@ -105,6 +125,11 @@ def draw_scene():
         if hit is None:
             break
         hits.append(hit)
+
+        if i == 0 and guess_strategy == 1: # initial intersection
+            initial_ray2 = Ray(C0, hit.P() - C0)
+            ray2 = initial_ray2
+
 
         # Draw the ray to the hit point
         ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-', label=LABEL_RAY if i == 0 else None)
@@ -117,13 +142,15 @@ def draw_scene():
         # intersect ray2 with the same plane
         hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
         if hit2 is not None:
-            ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if i == 0 else None)
+            if draw_guess:
+                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if i == 0 else None)
             # update ray2
             prevP = ray2.P() + ray2.dP()
             ray2 = ray2.transfer(hit2)
             curP = ray2.P() + ray2.dP()
             # draw ray differential segment
-            ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if i == 0 else None)
+            if draw_differentials:
+                ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if i == 0 else None)
             ray2 = ray2.sampleNext(hit2)
 
             # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
@@ -134,8 +161,12 @@ def draw_scene():
             lastS = s
 
     # use lastS to determine the new ray2 initial direction.
-    ray2 = Ray(C0, dir)
-    newDir = ray2.D() + lastS * ray2.dD()
+    ray2 = initial_ray2
+    #newDir = ray2.D() + lastS * ray2.dD()
+    #newDir /= np.linalg.norm(newDir)
+    # determine new direction based on transferred dP
+    ray2TempTransfer = ray2.transfer(ray2.calcHit(hits[0].Plane(), forceIntersect=True))
+    newDir = ray2TempTransfer.P() + lastS * ray2TempTransfer.dP() - C0
     newDir /= np.linalg.norm(newDir)
     ray2 = Ray(C0, newDir)
     # draw predicted ray2 path
@@ -164,6 +195,9 @@ ax_sliders = [
     fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # C0.x
     fig.add_axes([0.75, 0.50, 0.2, 0.03]),  # C0.y
     fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # max bounces
+    fig.add_axes([0.75, 0.35, 0.2, 0.03]),  # draw differentials
+    fig.add_axes([0.75, 0.30, 0.2, 0.03]),  # draw guess,
+    fig.add_axes([0.75, 0.15, 0.2, 0.1]),  # guess strategy radio buttons
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -173,23 +207,34 @@ slider_C0x = Slider(ax_sliders[3], "C0.x", -10.0, 10.0, valinit=C0[0])
 slider_C0y = Slider(ax_sliders[4], "C0.y", -10.0, 10.0, valinit=C0[1])
 # integer slider for max bounces
 slider_max_bounces = Slider(ax_sliders[5], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
+# checkbox for draw differentials and guess
+checkbox_draw_differentials = CheckButtons(ax_sliders[6], ["Draw Differentials"], [draw_differentials])
+checkbox_draw_guess = CheckButtons(ax_sliders[7], ["Draw Guess"], [draw_guess])
+# radio buttons for guess strategy
+radio_guess_strategy = RadioButtons(ax_sliders[8], guess_strategies, active=guess_strategy)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, guess_strategy
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
     C0[0] = slider_C0x.val
     C0[1] = slider_C0y.val
     max_bounces = int(slider_max_bounces.val)
+    draw_differentials = checkbox_draw_differentials.get_status()[0]
+    draw_guess = checkbox_draw_guess.get_status()[0]
+    guess_strategy = guess_strategies.index(radio_guess_strategy.value_selected)
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces]:
     s.on_changed(update)
+
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy]:
+    c.on_clicked(update)
 
 # Initial draw
 draw_scene()

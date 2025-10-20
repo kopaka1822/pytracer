@@ -12,7 +12,7 @@ class Ray:
 
         self._dP = np.zeros(2) if dP is None else np.asarray(dP, dtype=float)
         # tangent based perpedicular vector
-        Right = 0.04 * np.array([-D[1], D[0]])
+        Right = 0.14 * np.array([-D[1], D[0]])
         # dD = (dot(d, d) * Right - dot(d, Right) * d) / (dot(d, d) ** 1.5)
         # here: let d = D
         self._dD = (np.dot(D, D) * Right - np.dot(D, Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)
@@ -67,7 +67,7 @@ class Ray:
         dDNew = self._dD - 2 * (np.dot(D, N) * dN + dDN * N)
         return Ray(hit.P(), R, self._dP, dDNew)
 
-    def _refract(I, N, eta):
+    def _refract(self, I, N, eta):
         if np.dot(I, N) > 0:
             N = -N
         cosi = -np.dot(N, I)   # >= 0
