@@ -4,18 +4,18 @@ from plane import Plane
 
 class Ray:
 
-    def __init__(self, P: np.ndarray, D: np.ndarray):
+    def __init__(self, P: np.ndarray, D: np.ndarray, dP: np.ndarray | None = None, dD: np.ndarray | None = None):
         self._P = np.asarray(P, dtype=float)
         D = np.asarray(D, dtype=float)
         D /= np.linalg.norm(D)
         self._D = D
 
-        self._dP = np.zeros((2, 2))
+        self._dP = np.zeros((2, 2)) if dP is None else np.asarray(dP, dtype=float)
         # tangent based perpedicular vector
-        Right = np.array([-D[1], D[0], 0])
+        Right = np.array([-D[1], D[0]])
         # dD = (dot(d, d) * Right - dot(d, Right) * d) / (dot(d, d) ** 1.5)
         # here: let d = D
-        self._dD = (np.dot(D, D) * Right - np.dot(D, Right) * D) / (np.dot(D, D) ** 1.5)
+        self._dD = (np.dot(D, D) * Right - np.dot(D, Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)
 
     # --- Getter ---
     def P(self) -> np.ndarray:
@@ -100,7 +100,7 @@ class Ray:
 
         return Ray(hit.P(), Dnew, self._dP, dDNew)
 
-    def next(self, hit: Hit) -> "Ray | None":
+    def sampleNext(self, hit: Hit) -> "Ray | None":
         if hit.Plane().Ior() == 1.0:
             return self.reflect(hit)
         else:
