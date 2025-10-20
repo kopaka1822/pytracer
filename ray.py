@@ -95,7 +95,8 @@ class Ray:
         dN = 0
         mu = eta * np.dot(D, N) - np.dot(Dnew, N)
         dDN = np.dot(self._dD, N) + np.dot(D, dN)
-        dmu = (eta - (eta * eta * np.dot(D, N) / np.dot(Dnew, N))) * dDN # Note: falcor implementaion uses eta + eta * eta instead?
+        #dmu = (eta - (eta * eta * np.dot(D, N) / np.dot(Dnew, N))) * dDN # Note: falcor implementaion uses eta + eta * eta instead?
+        dmu = (eta + (eta * eta * np.dot(D, N) / np.dot(Dnew, N))) * dDN # Note: falcor implementaion uses eta + eta * eta instead?
         dDNew = eta * self._dD - (mu * dN + dmu * N)
 
         return Ray(hit.P(), Dnew, self._dP, dDNew)

@@ -72,6 +72,8 @@ draw_differentials = True
 draw_guess = True
 guess_strategies = ["same direction", "initial intersection"]
 guess_strategy = 0  # index into guess_strategies
+predict_strategies = ["adjust dD", "adjust dP"]
+predict_strategy = 0  # index into predict_strategies
 
 # ---------------------------------------------------------------
 # Draw function
@@ -162,11 +164,11 @@ def draw_scene():
 
     # use lastS to determine the new ray2 initial direction.
     ray2 = initial_ray2
-    #newDir = ray2.D() + lastS * ray2.dD()
-    #newDir /= np.linalg.norm(newDir)
+    newDir = ray2.D() + lastS * ray2.dD() # adjust dD (predict_strategy == 0)
     # determine new direction based on transferred dP
-    ray2TempTransfer = ray2.transfer(ray2.calcHit(hits[0].Plane(), forceIntersect=True))
-    newDir = ray2TempTransfer.P() + lastS * ray2TempTransfer.dP() - C0
+    if predict_strategy == 1:
+        ray2TempTransfer = ray2.transfer(ray2.calcHit(hits[0].Plane(), forceIntersect=True))
+        newDir = ray2TempTransfer.P() + lastS * ray2TempTransfer.dP() - C0
     newDir /= np.linalg.norm(newDir)
     ray2 = Ray(C0, newDir)
     # draw predicted ray2 path
@@ -198,6 +200,7 @@ ax_sliders = [
     fig.add_axes([0.75, 0.35, 0.2, 0.03]),  # draw differentials
     fig.add_axes([0.75, 0.30, 0.2, 0.03]),  # draw guess,
     fig.add_axes([0.75, 0.15, 0.2, 0.1]),  # guess strategy radio buttons
+    fig.add_axes([0.75, 0.05, 0.2, 0.1]),  # predict strategy radio buttons
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -212,13 +215,14 @@ checkbox_draw_differentials = CheckButtons(ax_sliders[6], ["Draw Differentials"]
 checkbox_draw_guess = CheckButtons(ax_sliders[7], ["Draw Guess"], [draw_guess])
 # radio buttons for guess strategy
 radio_guess_strategy = RadioButtons(ax_sliders[8], guess_strategies, active=guess_strategy)
+radio_predict_strategy = RadioButtons(ax_sliders[9], predict_strategies, active=predict_strategy)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, guess_strategy
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, guess_strategy, predict_strategy
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -228,12 +232,13 @@ def update(val):
     draw_differentials = checkbox_draw_differentials.get_status()[0]
     draw_guess = checkbox_draw_guess.get_status()[0]
     guess_strategy = guess_strategies.index(radio_guess_strategy.value_selected)
+    predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy]:
     c.on_clicked(update)
 
 # Initial draw
