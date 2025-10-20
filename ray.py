@@ -10,9 +10,9 @@ class Ray:
         D /= np.linalg.norm(D)
         self._D = D
 
-        self._dP = np.zeros((2, 2)) if dP is None else np.asarray(dP, dtype=float)
+        self._dP = np.zeros(2) if dP is None else np.asarray(dP, dtype=float)
         # tangent based perpedicular vector
-        Right = np.array([-D[1], D[0]])
+        Right = 0.04 * np.array([-D[1], D[0]])
         # dD = (dot(d, d) * Right - dot(d, Right) * d) / (dot(d, d) ** 1.5)
         # here: let d = D
         self._dD = (np.dot(D, D) * Right - np.dot(D, Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)

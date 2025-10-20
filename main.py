@@ -39,6 +39,15 @@ def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
 
     return closest_hit
 
+# solves A * s = B for scalar s
+def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
+    if abs(A[0]) > abs(A[1]):
+        s = B[0] / A[0]
+    else:
+        s = B[1] / A[1]
+    return s
+
+
 # Camera positions (modifiable via sliders)
 C0 = np.array([-8.6, 5.0])
 C1 = np.array([-9.2, 4.5])
@@ -57,6 +66,11 @@ def draw_scene():
     ax.set_title("Ray Differential Motion Vector")
     ax.grid(True, linestyle="--", alpha=0.3)
 
+    LABEL_RAY = "original"
+    LABEL_RAY2 = "guess"
+    LABEL_RAY2_DIFF = "differential"
+    LABEL_RAY2_PRED = "predicted"
+
     # Draw finite planes
     for pl in planes:
         P1, P2 = pl.P1(), pl.P2()
@@ -68,8 +82,10 @@ def draw_scene():
                  head_width=0.2, color='r', length_includes_head=True)
 
     # Draw cameras
-    ax.plot(C0[0], C0[1], 'bo', label="C0")
-    ax.plot(C1[0], C1[1], 'go', label="C1")
+    ax.plot(C0[0], C0[1], 'bo')
+    ax.text(C0[0]-0.4, C0[1]+0.2, "C0", color='b')
+    ax.plot(C1[0], C1[1], 'go')
+    ax.text(C1[0]-0.4, C1[1]+0.2, "C1", color='g')
 
     # Draw C1 ray direction
     dir_len = 1.5
@@ -79,21 +95,58 @@ def draw_scene():
 
     prevPlane = None
     ray = Ray(C1, dir)
+    ray2 = Ray(C0, dir)  # corresponding ray from C0
+    lastS = 0.0 # last solution for ray2 differential
+    hits = []
     # main loop
-    for _ in range(max_bounces):
+    for i in range(max_bounces):
         # Find the closest intersection
         hit = closestIntersect(ray, prevPlane)
         if hit is None:
             break
+        hits.append(hit)
 
         # Draw the ray to the hit point
-        ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-')
+        ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-', label=LABEL_RAY if i == 0 else None)
 
         # Transfer the ray to the hit point
         ray = ray.transfer(hit)
         ray = ray.sampleNext(hit)
         prevPlane = hit.Plane()
 
+        # intersect ray2 with the same plane
+        hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
+        if hit2 is not None:
+            ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if i == 0 else None)
+            # update ray2
+            prevP = ray2.P() + ray2.dP()
+            ray2 = ray2.transfer(hit2)
+            curP = ray2.P() + ray2.dP()
+            # draw ray differential segment
+            ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if i == 0 else None)
+            ray2 = ray2.sampleNext(hit2)
+
+            # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
+            P = ray.P()
+            PStar = ray2.P()
+            dP = ray2.dP()
+            s = solveLinearEq(dP, P - PStar)
+            lastS = s
+
+    # use lastS to determine the new ray2 initial direction.
+    ray2 = Ray(C0, dir)
+    newDir = ray2.D() + lastS * ray2.dD()
+    newDir /= np.linalg.norm(newDir)
+    ray2 = Ray(C0, newDir)
+    # draw predicted ray2 path
+    for hit in hits:
+        hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
+        if hit2 is not None:
+            ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'orange', label=LABEL_RAY2_PRED if hit == hits[0] else None) # draw in orange
+            ray2 = ray2.transfer(hit2)
+            ray2 = ray2.sampleNext(hit2)
+
+    ax.legend(loc="upper right")
     fig.canvas.draw_idle()
 
 # ---------------------------------------------------------------
