@@ -29,7 +29,7 @@ refraction_scene = [
 
     # two planes in center for glass
     Plane([-10, 2], [10, 2], ior=1.5),
-    Plane([10, 0], [-10, 0], ior=1.5),
+    Plane([10, 0], [-10, -1], ior=1.5),
 
     # box around -10, 10
     Plane([-10, -10], [-10, 10]),
@@ -176,6 +176,12 @@ def draw_scene():
             ax.plot([ray2.P()[0], dpend[0]], [ray2.P()[1], dpend[1]], 'c-', lw=2.0)
             dphalf = ray2.P() + ray2.dP() * 0.5
             ax.text(dphalf[0]+0.2, dphalf[1]+0.2, "dP", color='c')
+        # draw s
+        ax.arrow(ray2.P()[0], ray2.P()[1], lastS * ray2.dP()[0], lastS * ray2.dP()[1], head_width=0.3, color='m', length_includes_head=True)
+        send = ray2.P() + lastS * ray2.dP()
+        ax.plot([ray2.P()[0], send[0]], [ray2.P()[1], send[1]], 'm-', lw=1.0)
+        shalf = ray2.P() + lastS * ray2.dP() * 0.5
+        ax.text(shalf[0]+0.2, shalf[1]+0.2, "s", color='m')
 
     # use lastS to determine the new ray2 initial direction.
     ray2 = initial_ray2
