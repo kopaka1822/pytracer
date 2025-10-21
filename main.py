@@ -164,6 +164,19 @@ def draw_scene():
             s = solveLinearEq(dP, P - PStar)
             lastS = s
 
+    # draw point P, PStar and dP
+    ax.plot(ray.P()[0], ray.P()[1], 'go')
+    ax.text(ray.P()[0]+0.2, ray.P()[1]+0.2, "P", color='g')
+    if draw_guess:
+        ax.plot(ray2.P()[0], ray2.P()[1], 'bo')
+        ax.text(ray2.P()[0]+0.2, ray2.P()[1]+0.2, "P*", color='b')
+        if draw_differentials:
+            dpend = ray2.P() + ray2.dP()
+            ax.arrow(ray2.P()[0], ray2.P()[1], ray2.dP()[0], ray2.dP()[1], head_width=0.4, color='c', length_includes_head=True)
+            ax.plot([ray2.P()[0], dpend[0]], [ray2.P()[1], dpend[1]], 'c-', lw=2.0)
+            dphalf = ray2.P() + ray2.dP() * 0.5
+            ax.text(dphalf[0]+0.2, dphalf[1]+0.2, "dP", color='c')
+
     # use lastS to determine the new ray2 initial direction.
     ray2 = initial_ray2
     newDir = ray2.D() + lastS * ray2.dD() # adjust dD (predict_strategy == 0)
