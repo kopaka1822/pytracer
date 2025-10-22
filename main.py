@@ -38,7 +38,7 @@ refraction_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
-planes = reflection_scene
+planes = refraction_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -74,6 +74,7 @@ guess_strategies = ["same direction", "initial intersection"]
 guess_strategy = 0  # index into guess_strategies
 predict_strategies = ["adjust dD", "adjust dP", "adjust D", "ray length"]
 predict_strategy = 0  # index into predict_strategies
+useSpeed = False
 
 # ---------------------------------------------------------------
 # Draw function
@@ -121,6 +122,7 @@ def draw_scene():
     lastS = 0.0 # last solution for ray2 differential
     hits = []
     rayLength = 0.0
+    speed = 1.0
     # main loop
     for i in range(max_bounces):
         # Find the closest intersection
@@ -128,7 +130,7 @@ def draw_scene():
         if hit is None:
             break
         hits.append(hit)
-        rayLength += hit.T()
+        rayLength += speed * hit.T()
 
         if i == 0 and guess_strategy == 1: # initial intersection
             initial_ray2 = Ray(C0, hit.P() - C0)
@@ -140,7 +142,14 @@ def draw_scene():
 
         # Transfer the ray to the hit point
         ray = ray.transfer(hit)
+        #if useSpeed:
+        #    speed *= ray.eta(hit)
+        cosalpha = abs(np.dot(ray.D(), hit.Plane().N()))
         ray = ray.sampleNext(hit)
+        cosbeta = abs(np.dot(ray.D(), hit.Plane().N()))
+        if useSpeed:
+            speed *= cosalpha / cosbeta
+
         prevPlane = hit.Plane()
 
         # intersect ray2 with the same plane
@@ -233,8 +242,9 @@ ax_sliders = [
     fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
     fig.add_axes([0.75, 0.30, 0.2, 0.1]),   # guess strategy radio buttons
     fig.add_axes([0.75, 0.20, 0.2, 0.1]),   # predict strategy radio buttons
-    fig.add_axes([0.75, 0.10, 0.2, 0.1]),   # use normalized rays
-    fig.add_axes([0.75, 0.00, 0.2, 0.1]),   # use pseudo differentials
+    fig.add_axes([0.75, 0.14, 0.2, 0.05]),   # use normalized rays
+    fig.add_axes([0.75, 0.085, 0.2, 0.05]),  # use pseudo differentials
+    fig.add_axes([0.75, 0.03, 0.2, 0.05]),   # use speed
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -255,13 +265,15 @@ radio_predict_strategy = RadioButtons(ax_sliders[10], predict_strategies, active
 checkbox_normalized = CheckButtons(ax_sliders[11], ["Use Normalized Rays"], [Ray.normalized])
 # checkbox for pseudo differentials
 checkbox_pseudo_differentials = CheckButtons(ax_sliders[12], ["Use Pseudo Differentials"], [Ray.pseudo_differentials])
+# checkbox for use speed
+checkbox_use_speed = CheckButtons(ax_sliders[13], ["Use Speed"], [useSpeed])
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, guess_strategy, predict_strategy
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, guess_strategy, predict_strategy, useSpeed
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -275,12 +287,13 @@ def update(val):
     Ray.tangent_scale = slider_tangent_scale.val
     Ray.normalized = checkbox_normalized.get_status()[0]
     Ray.pseudo_differentials = checkbox_pseudo_differentials.get_status()[0]
+    useSpeed = checkbox_use_speed.get_status()[0]
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy, checkbox_normalized, checkbox_pseudo_differentials]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy, checkbox_normalized, checkbox_pseudo_differentials, checkbox_use_speed]:
     c.on_clicked(update)
 
 # Initial draw

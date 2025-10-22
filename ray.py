@@ -95,6 +95,15 @@ class Ray:
         T = eta * I + (eta * cosi - np.sqrt(k)) * N
         return T / np.linalg.norm(T)
 
+    def eta(self, hit: Hit) -> float:
+        N = hit.Plane().N()
+        D = self._D
+
+        if np.dot(N, -D) < 0:
+            return hit.Plane().Ior()
+        else:
+            return 1.0 / hit.Plane().Ior()
+
     def refract(self, hit: Hit) -> "Ray | None":
         N = hit.Plane().N()
         eta = 1.0 / hit.Plane().Ior()
