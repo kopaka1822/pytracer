@@ -38,7 +38,7 @@ refraction_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
-planes = refraction_scene
+planes = reflection_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -64,8 +64,8 @@ def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
 
 
 # Camera positions (modifiable via sliders)
-C0 = np.array([-8.6, 5.0])
-C1 = np.array([-9.2, 4.5])
+C0 = np.array([-10, 2.15])
+C1 = np.array([-8.55, 4.5])
 C1_angle = -46.8  # in degrees
 max_bounces = 3
 draw_differentials = True
@@ -155,7 +155,12 @@ def draw_scene():
             # draw ray differential segment
             if draw_differentials:
                 ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if i == 0 else None)
+
             ray2 = ray2.sampleNext(hit2)
+
+            if draw_differentials:
+                # debug D + dD
+                ax.arrow(ray2.P()[0] + ray2.dP()[0], ray2.P()[1] + ray2.dP()[1], ray2.D()[0] + ray2.dD()[0], ray2.D()[1] + ray2.dD()[1], head_width=0.2, color='orange', length_includes_head=True)
 
             # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
             P = ray.P()
@@ -228,6 +233,8 @@ ax_sliders = [
     fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
     fig.add_axes([0.75, 0.30, 0.2, 0.1]),   # guess strategy radio buttons
     fig.add_axes([0.75, 0.20, 0.2, 0.1]),   # predict strategy radio buttons
+    fig.add_axes([0.75, 0.10, 0.2, 0.1]),   # use normalized rays
+    fig.add_axes([0.75, 0.00, 0.2, 0.1]),   # use pseudo differentials
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -244,6 +251,10 @@ checkbox_draw_guess = CheckButtons(ax_sliders[8], ["Draw Guess"], [draw_guess])
 # radio buttons for guess strategy
 radio_guess_strategy = RadioButtons(ax_sliders[9], guess_strategies, active=guess_strategy)
 radio_predict_strategy = RadioButtons(ax_sliders[10], predict_strategies, active=predict_strategy)
+# checkbox for normalized rays
+checkbox_normalized = CheckButtons(ax_sliders[11], ["Use Normalized Rays"], [Ray.normalized])
+# checkbox for pseudo differentials
+checkbox_pseudo_differentials = CheckButtons(ax_sliders[12], ["Use Pseudo Differentials"], [Ray.pseudo_differentials])
 
 # ---------------------------------------------------------------
 # Slider callbacks
@@ -262,12 +273,14 @@ def update(val):
     guess_strategy = guess_strategies.index(radio_guess_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     Ray.tangent_scale = slider_tangent_scale.val
+    Ray.normalized = checkbox_normalized.get_status()[0]
+    Ray.pseudo_differentials = checkbox_pseudo_differentials.get_status()[0]
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy, checkbox_normalized, checkbox_pseudo_differentials]:
     c.on_clicked(update)
 
 # Initial draw
