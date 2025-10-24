@@ -72,12 +72,18 @@ draw_differentials = True
 draw_guess = True
 guess_strategies = ["same direction", "initial intersection"]
 guess_strategy = 0  # index into guess_strategies
-predict_strategies = ["adjust dD", "adjust dP", "adjust D", "ray length"]
+predict_strategies = ["ray diff", "ray length"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
 
+# labels
+LABEL_RAY = "original"
+LABEL_RAY2 = "guess"
+LABEL_RAY2_DIFF = "differential"
+LABEL_RAY2_PRED = "predicted"
+
 # ---------------------------------------------------------------
-# Draw function
+# Draw functions
 # ---------------------------------------------------------------
 
 def draw_scene():
@@ -88,10 +94,7 @@ def draw_scene():
     ax.set_title("Ray Differential Motion Vector")
     ax.grid(True, linestyle="--", alpha=0.3)
 
-    LABEL_RAY = "original"
-    LABEL_RAY2 = "guess"
-    LABEL_RAY2_DIFF = "differential"
-    LABEL_RAY2_PRED = "predicted"
+
 
     # Draw finite planes
     for pl in planes:
@@ -202,18 +205,19 @@ def draw_scene():
 
     # use lastS to determine the new ray2 initial direction.
     ray2 = initial_ray2
-    newDir = ray2.D() + lastS * ray2.dD() # adjust dD (predict_strategy == 0)
-    # determine new direction based on transferred dP
+    if predict_strategy == 0:
+        newDir = initial_ray2.shiftS(lastS).D()
     if predict_strategy == 1:
-        ray2TempTransfer = ray2.transfer(ray2.calcHit(hits[0].Plane(), forceIntersect=True))
-        newDir = ray2TempTransfer.P() + lastS * ray2TempTransfer.dP() - C0
-    if predict_strategy == 2:
-        ray2TempShift = initial_ray2.shiftS(lastS)
-        newDir = ray2TempShift.D()
-    if predict_strategy == 3:
         newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
-    ray2 = Ray(C0, newDir)
+
+    draw_prediction(C0, newDir, hits)
+
+    ax.legend(loc="upper right")
+    fig.canvas.draw_idle()
+
+def draw_prediction(C0, dir, hits):
+    ray2 = Ray(C0, dir)
     # draw predicted ray2 path
     for hit in hits:
         hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
@@ -222,8 +226,6 @@ def draw_scene():
             ray2 = ray2.transfer(hit2)
             ray2 = ray2.sampleNext(hit2)
 
-    ax.legend(loc="upper right")
-    fig.canvas.draw_idle()
 
 # ---------------------------------------------------------------
 # Matplotlib setup
