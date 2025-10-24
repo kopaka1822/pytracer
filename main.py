@@ -38,7 +38,7 @@ refraction_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
-planes = refraction_scene
+planes = reflection_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None

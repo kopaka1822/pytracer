@@ -47,7 +47,7 @@ class Ray:
             return None  # Parallel
 
         t = np.dot(N, P0 - self._P) / denom
-        if t <= 0:
+        if t <= 0 and not forceIntersect:
             return None  # intersect behind plane
 
         hit_point = self._P + t * self._D
