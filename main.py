@@ -130,7 +130,10 @@ def draw_scene():
         if hit is None:
             break
         hits.append(hit)
-        rayLength += speed * hit.T()
+        #rayLength += speed * hit.T()
+        rayLength += hit.T()
+        if useSpeed:
+            rayLength = rayLength / ray.eta(hit)
 
         if i == 0 and guess_strategy == 1: # initial intersection
             initial_ray2 = Ray(C0, hit.P() - C0)
@@ -242,9 +245,7 @@ ax_sliders = [
     fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
     fig.add_axes([0.75, 0.30, 0.2, 0.1]),   # guess strategy radio buttons
     fig.add_axes([0.75, 0.20, 0.2, 0.1]),   # predict strategy radio buttons
-    fig.add_axes([0.75, 0.14, 0.2, 0.05]),   # use normalized rays
-    fig.add_axes([0.75, 0.085, 0.2, 0.05]),  # use pseudo differentials
-    fig.add_axes([0.75, 0.03, 0.2, 0.05]),   # use speed
+    fig.add_axes([0.75, 0.10, 0.2, 0.05]),   # use speed
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -261,12 +262,8 @@ checkbox_draw_guess = CheckButtons(ax_sliders[8], ["Draw Guess"], [draw_guess])
 # radio buttons for guess strategy
 radio_guess_strategy = RadioButtons(ax_sliders[9], guess_strategies, active=guess_strategy)
 radio_predict_strategy = RadioButtons(ax_sliders[10], predict_strategies, active=predict_strategy)
-# checkbox for normalized rays
-checkbox_normalized = CheckButtons(ax_sliders[11], ["Use Normalized Rays"], [Ray.normalized])
-# checkbox for pseudo differentials
-checkbox_pseudo_differentials = CheckButtons(ax_sliders[12], ["Use Pseudo Differentials"], [Ray.pseudo_differentials])
 # checkbox for use speed
-checkbox_use_speed = CheckButtons(ax_sliders[13], ["Use Speed"], [useSpeed])
+checkbox_use_speed = CheckButtons(ax_sliders[11], ["Use Speed"], [useSpeed])
 
 # ---------------------------------------------------------------
 # Slider callbacks
@@ -285,15 +282,13 @@ def update(val):
     guess_strategy = guess_strategies.index(radio_guess_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     Ray.tangent_scale = slider_tangent_scale.val
-    Ray.normalized = checkbox_normalized.get_status()[0]
-    Ray.pseudo_differentials = checkbox_pseudo_differentials.get_status()[0]
     useSpeed = checkbox_use_speed.get_status()[0]
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy, checkbox_normalized, checkbox_pseudo_differentials, checkbox_use_speed]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy, checkbox_use_speed]:
     c.on_clicked(update)
 
 # Initial draw

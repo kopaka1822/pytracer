@@ -5,14 +5,11 @@ from plane import Plane
 class Ray:
     # static variables
     tangent_scale = 0.14
-    normalized = True
-    pseudo_differentials = False
 
     def __init__(self, P: np.ndarray, D: np.ndarray, dP: np.ndarray | None = None, dD: np.ndarray | None = None):
         self._P = np.asarray(P, dtype=float)
         D = np.asarray(D, dtype=float)
-        if Ray.normalized:
-            D /= np.linalg.norm(D)
+        D /= np.linalg.norm(D)
         self._D = D
 
         self._dP = np.zeros(2) if dP is None else np.asarray(dP, dtype=float)
@@ -20,10 +17,9 @@ class Ray:
         self._Right = Ray.tangent_scale * np.array([-D[1], D[0]])
         # dD = (dot(d, d) * Right - dot(d, Right) * d) / (dot(d, d) ** 1.5)
         # here: let d = D
-        if Ray.normalized:
-            self._dD = (np.dot(D, D) * self._Right - np.dot(D, self._Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)
-        else:
-            self._dD = self._Right if dD is None else np.asarray(dD, dtype=float) # unnormalized case is simply the right vector
+        self._dD = (np.dot(D, D) * self._Right - np.dot(D, self._Right) * D) / (np.dot(D, D) ** 1.5) if dD is None else np.asarray(dD, dtype=float)
+        # same as:
+        # self._dD = self._Right if dD is None else np.asarray(dD, dtype=float) # since Right and d are orthogonal and d is normalized
 
     # --- Getter ---
     def P(self) -> np.ndarray:
@@ -67,12 +63,8 @@ class Ray:
         return Hit(plane, hit_point, t)
 
     def transfer(self, hit: Hit) -> "Ray":
-        if Ray.pseudo_differentials:
-            dt = - np.dot(self._dP + hit.T() * self._dD, hit.Plane().N()) / np.dot(self._D + self._dD, hit.Plane().N())
-            dPNew = self._dP + hit.T() * self._dD + dt * (self._D + self._dD)
-        else:
-            dt = - np.dot(self._dP + hit.T() * self._dD, hit.Plane().N()) / np.dot(self._D, hit.Plane().N())
-            dPNew = self._dP + hit.T() * self._dD + dt * self._D
+        dt = - np.dot(self._dP + hit.T() * self._dD, hit.Plane().N()) / np.dot(self._D, hit.Plane().N())
+        dPNew = self._dP + hit.T() * self._dD + dt * self._D
         return Ray(hit.P(), self._D, dPNew, self._dD)
 
     def reflect(self, hit: Hit) -> "Ray":
