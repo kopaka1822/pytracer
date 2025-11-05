@@ -70,6 +70,9 @@ C1_angle = -46.8  # in degrees
 max_bounces = 3
 draw_differentials = True
 draw_guess = True
+iterations = 1
+iteration_strategies = ["Virtual iterations", "Real iterations"]
+iteration_strategy = 0  # index into iteration_strategies
 predict_strategies = ["ray diff", "ray length"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
@@ -237,8 +240,10 @@ ax_sliders = [
     fig.add_axes([0.75, 0.60, 0.2, 0.03]),  # max bounces
     fig.add_axes([0.75, 0.50, 0.2, 0.03]),  # draw differentials
     fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
-    fig.add_axes([0.75, 0.20, 0.2, 0.1]),   # predict strategy radio buttons
-    fig.add_axes([0.75, 0.10, 0.2, 0.05]),   # use speed
+    fig.add_axes([0.75, 0.40, 0.2, 0.03]),  # iterations
+    fig.add_axes([0.75, 0.28, 0.2, 0.1]),   # iteration strategy radio buttons
+    fig.add_axes([0.75, 0.16, 0.2, 0.1]),   # predict strategy radio buttons
+    fig.add_axes([0.75, 0.06, 0.2, 0.05]),   # use speed
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -252,17 +257,21 @@ slider_max_bounces = Slider(ax_sliders[6], "Max Bounces", 1, 10, valinit=max_bou
 # checkbox for draw differentials and guess
 checkbox_draw_differentials = CheckButtons(ax_sliders[7], ["Draw Differentials"], [draw_differentials])
 checkbox_draw_guess = CheckButtons(ax_sliders[8], ["Draw Guess"], [draw_guess])
+# integer slider for iterations
+slider_iterations = Slider(ax_sliders[9], "Iterations ", 1, 20, valinit=iterations, valstep=1)
+# radio buttons for iteration strategy
+radio_iteration_strategy = RadioButtons(ax_sliders[10], iteration_strategies, active=iteration_strategy)
 # radio buttons for predict strategy
-radio_predict_strategy = RadioButtons(ax_sliders[9], predict_strategies, active=predict_strategy)
+radio_predict_strategy = RadioButtons(ax_sliders[11], predict_strategies, active=predict_strategy)
 # checkbox for use speed
-checkbox_use_speed = CheckButtons(ax_sliders[10], ["Use Speed"], [useSpeed])
+checkbox_use_speed = CheckButtons(ax_sliders[12], ["Use Speed"], [useSpeed])
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, predict_strategy, useSpeed
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, iterations, iteration_strategy, predict_strategy, useSpeed
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -271,15 +280,17 @@ def update(val):
     max_bounces = int(slider_max_bounces.val)
     draw_differentials = checkbox_draw_differentials.get_status()[0]
     draw_guess = checkbox_draw_guess.get_status()[0]
+    iterations = int(slider_iterations.val)
+    iteration_strategy = iteration_strategies.index(radio_iteration_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     Ray.tangent_scale = slider_tangent_scale.val
     useSpeed = checkbox_use_speed.get_status()[0]
     draw_scene()
 
-for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale]:
+for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_predict_strategy, checkbox_use_speed]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed]:
     c.on_clicked(update)
 
 # Initial draw
