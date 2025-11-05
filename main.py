@@ -38,7 +38,7 @@ refraction_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
-planes = reflection_scene
+planes = refraction_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -202,6 +202,7 @@ def draw_scene():
     initial_ray = Ray(C0, dir)
     if predict_strategy == 0:
         newDir = initial_ray.shiftS(lastS).D()
+        newDir = doIterations(C0, newDir, hits)
     if predict_strategy == 1:
         newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
@@ -210,6 +211,39 @@ def draw_scene():
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
+
+def doIterations(C0, newDir, hits):
+    P = hits[-1].P()
+    bestDiff = float('inf')
+    bestDir = newDir.copy()
+
+    # refine newDir over multiple iterations
+    for _ in range(iterations):
+        ray2 = Ray(C0, newDir)
+        # trace ray through all hits
+        for hit in hits:
+            hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
+            if hit2 is not None:
+                ray2 = ray2.transfer(hit2)
+                ray2 = ray2.sampleNext(hit2)
+        
+        # check final position
+        curP = ray2.P()
+        diff = np.linalg.norm(P - curP)
+        if diff < bestDiff:
+            bestDiff = diff
+            bestDir = newDir.copy()
+
+            # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
+            PStar = ray2.P()
+            dP = ray2.dP()
+            s = solveLinearEq(dP, P - PStar)
+            
+            # update newDir
+            newDir = Ray(C0, newDir).shiftS(s).D()
+    
+    return bestDir
+
 
 def draw_prediction(C0, dir, hits):
     ray2 = Ray(C0, dir)
