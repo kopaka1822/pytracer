@@ -70,8 +70,6 @@ C1_angle = -46.8  # in degrees
 max_bounces = 3
 draw_differentials = True
 draw_guess = True
-guess_strategies = ["same direction", "initial intersection"]
-guess_strategy = 0  # index into guess_strategies
 predict_strategies = ["ray diff", "ray length"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
@@ -120,8 +118,7 @@ def draw_scene():
 
     prevPlane = None
     ray = Ray(C1, dir)
-    initial_ray2 = Ray(C0, dir)
-    ray2 = initial_ray2
+    ray2 = Ray(C0, dir)
     lastS = 0.0 # last solution for ray2 differential
     hits = []
     rayLength = 0.0
@@ -137,11 +134,6 @@ def draw_scene():
         rayLength += hit.T()
         if useSpeed:
             rayLength = rayLength / ray.eta(hit)
-
-        if i == 0 and guess_strategy == 1: # initial intersection
-            initial_ray2 = Ray(C0, hit.P() - C0)
-            ray2 = initial_ray2
-
 
         # Draw the ray to the hit point
         ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-', label=LABEL_RAY if i == 0 else None)
@@ -204,9 +196,9 @@ def draw_scene():
         ax.text(shalf[0]+0.2, shalf[1]+0.2, "s", color='m')
 
     # use lastS to determine the new ray2 initial direction.
-    ray2 = initial_ray2
+    initial_ray = Ray(C0, dir)
     if predict_strategy == 0:
-        newDir = initial_ray2.shiftS(lastS).D()
+        newDir = initial_ray.shiftS(lastS).D()
     if predict_strategy == 1:
         newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
@@ -245,7 +237,6 @@ ax_sliders = [
     fig.add_axes([0.75, 0.60, 0.2, 0.03]),  # max bounces
     fig.add_axes([0.75, 0.50, 0.2, 0.03]),  # draw differentials
     fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
-    fig.add_axes([0.75, 0.30, 0.2, 0.1]),   # guess strategy radio buttons
     fig.add_axes([0.75, 0.20, 0.2, 0.1]),   # predict strategy radio buttons
     fig.add_axes([0.75, 0.10, 0.2, 0.05]),   # use speed
 ]
@@ -261,18 +252,17 @@ slider_max_bounces = Slider(ax_sliders[6], "Max Bounces", 1, 10, valinit=max_bou
 # checkbox for draw differentials and guess
 checkbox_draw_differentials = CheckButtons(ax_sliders[7], ["Draw Differentials"], [draw_differentials])
 checkbox_draw_guess = CheckButtons(ax_sliders[8], ["Draw Guess"], [draw_guess])
-# radio buttons for guess strategy
-radio_guess_strategy = RadioButtons(ax_sliders[9], guess_strategies, active=guess_strategy)
-radio_predict_strategy = RadioButtons(ax_sliders[10], predict_strategies, active=predict_strategy)
+# radio buttons for predict strategy
+radio_predict_strategy = RadioButtons(ax_sliders[9], predict_strategies, active=predict_strategy)
 # checkbox for use speed
-checkbox_use_speed = CheckButtons(ax_sliders[11], ["Use Speed"], [useSpeed])
+checkbox_use_speed = CheckButtons(ax_sliders[10], ["Use Speed"], [useSpeed])
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, guess_strategy, predict_strategy, useSpeed
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, predict_strategy, useSpeed
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -281,7 +271,6 @@ def update(val):
     max_bounces = int(slider_max_bounces.val)
     draw_differentials = checkbox_draw_differentials.get_status()[0]
     draw_guess = checkbox_draw_guess.get_status()[0]
-    guess_strategy = guess_strategies.index(radio_guess_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     Ray.tangent_scale = slider_tangent_scale.val
     useSpeed = checkbox_use_speed.get_status()[0]
@@ -290,7 +279,7 @@ def update(val):
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_guess_strategy, radio_predict_strategy, checkbox_use_speed]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_predict_strategy, checkbox_use_speed]:
     c.on_clicked(update)
 
 # Initial draw
