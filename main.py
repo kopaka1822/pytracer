@@ -202,17 +202,60 @@ def draw_scene():
     initial_ray = Ray(C0, dir)
     if predict_strategy == 0:
         newDir = initial_ray.shiftS(lastS).D()
-        newDir = doIterations(C0, newDir, hits)
+        if iteration_strategy == 0:
+            newDir = doVirtualIterations(C0, newDir, hits)
+        if iteration_strategy == 1:
+            newDir = doRealIterations(C0, newDir, hits)
     if predict_strategy == 1:
         newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
 
-    draw_prediction(C0, newDir, hits)
+    if predict_strategy == 0 and iteration_strategy == 1:
+        trace_and_draw_actual(C0, newDir, hits)
+    else:
+        draw_prediction(C0, newDir, hits)
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
 
-def doIterations(C0, newDir, hits):
+def doRealIterations(C0, newDir, hits):
+    P = hits[-1].P()
+    bestDiff = float('inf')
+    bestDir = newDir.copy()
+
+    # refine newDir over multiple iterations
+    for _ in range(iterations):
+        initial_dir = newDir.copy()
+        ray2 = Ray(C0, initial_dir)
+        prevPlane = None
+
+        # trace similar number of bounces as original ray
+        for _ in range(len(hits) * 2):
+            hit = closestIntersect(ray2, prevPlane)
+            if hit is None:
+                break
+            prevPlane = hit.Plane()
+            ray2 = ray2.transfer(hit)
+            ray2 = ray2.sampleNext(hit)
+
+            # test for difference at each step
+            curP = ray2.P()
+            diff = np.linalg.norm(P - curP)
+            if diff < bestDiff:
+                bestDiff = diff
+                bestDir = initial_dir.copy()
+
+                # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
+                PStar = ray2.P()
+                dP = ray2.dP()
+                s = solveLinearEq(dP, P - PStar)
+                
+                # update newDir
+                newDir = Ray(C0, initial_dir).shiftS(s).D()
+
+    return bestDir
+
+def doVirtualIterations(C0, newDir, hits):
     P = hits[-1].P()
     bestDiff = float('inf')
     bestDir = newDir.copy()
@@ -255,6 +298,32 @@ def draw_prediction(C0, dir, hits):
             ray2 = ray2.transfer(hit2)
             ray2 = ray2.sampleNext(hit2)
 
+def trace_and_draw_actual(C0, dir, hits):
+    ray2 = Ray(C0, dir)
+    P = hits[-1].P()
+    newHits = []
+    prevPlane = None
+    bestDiff = float('inf')
+    index = 0
+
+    # draw actual ray2 path
+    for _ in range(len(hits) * 2):
+        hit = closestIntersect(ray2, prevPlane)
+        if hit is None:
+            break
+        prevPlane = hit.Plane()
+        newHits.append(hit)
+        ray2 = ray2.transfer(hit)
+        ray2 = ray2.sampleNext(hit)
+
+        curP = ray2.P()
+        diff = np.linalg.norm(P - curP)
+
+        if diff < bestDiff:
+            bestDiff = diff
+            index = len(newHits) - 1
+
+    draw_prediction(C0, dir, newHits[:index+1])
 
 # ---------------------------------------------------------------
 # Matplotlib setup
