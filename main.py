@@ -76,6 +76,7 @@ iteration_strategy = 0  # index into iteration_strategies
 predict_strategies = ["ray diff", "ray length", "reflect and shear"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
+useShear = True
 
 # labels
 LABEL_RAY = "original"
@@ -227,6 +228,17 @@ def matrixMirror(O, N):
     ])
     return M
 
+# performs a shear transformation about point O with normal N and shear factor s
+def matrixShear(O, N, s):
+    nx, ny = N
+    ox, oy = O
+    d = nx * ox + ny * oy
+    M = np.array([
+        [1 - s*nx*ny, -s*ny*ny,  s*ny*d],
+        [ s*nx*nx, 1 + s*nx*ny, -s*nx*d],
+        [0, 0, 1]
+    ])
+    return M
 
 def methodRayLength(C0, C1, dir, hits):
     rayLength = 0.0
@@ -255,10 +267,20 @@ def methodReflectAndShear(C0, dir, hits):
     ray = Ray(C1, dir) # only used for tracking direction
     for hit in hits[:-1]:
         I = -ray.D() # incomming direction
+        eta = ray.eta(hit)
         ray = ray.transfer(hit).sampleNext(hit)
         R = ray.D() # outgoing direction
         H = (I + R) / np.linalg.norm(I + R)  # half-vector
-        viewTransform = mul(viewTransform, matrixMirror(hit.P(), H))
+        refraction = hit.Plane().Ior() != 1.0
+        if useShear and refraction:
+            # compute shear factor s
+            cosalpha = abs(np.dot(I, hit.Plane().N()))
+            cosbeta = abs(np.dot(R, hit.Plane().N()))
+            sinalpha = np.sqrt(1 - cosalpha * cosalpha)
+            s = sinalpha * (cosbeta - eta * cosalpha) / (cosalpha * cosbeta)
+            viewTransform = mul(viewTransform, matrixShear(hit.P(), hit.Plane().N(), s))
+        else:
+            viewTransform = mul(viewTransform, matrixMirror(hit.P(), H))
 
     P = hits[-1].P()
     Pnew = mul(viewTransform, np.array([P[0], P[1], 1.0]))[:2]
@@ -396,6 +418,7 @@ ax_sliders = [
     fig.add_axes([0.75, 0.28, 0.2, 0.1]),   # iteration strategy radio buttons
     fig.add_axes([0.75, 0.16, 0.2, 0.1]),   # predict strategy radio buttons
     fig.add_axes([0.75, 0.06, 0.2, 0.05]),   # use speed
+    fig.add_axes([0.75, 0.01, 0.2, 0.05]),   # use shear
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -417,13 +440,15 @@ radio_iteration_strategy = RadioButtons(ax_sliders[10], iteration_strategies, ac
 radio_predict_strategy = RadioButtons(ax_sliders[11], predict_strategies, active=predict_strategy)
 # checkbox for use speed
 checkbox_use_speed = CheckButtons(ax_sliders[12], ["Use Speed"], [useSpeed])
+# checkbox for use shear
+checkbox_use_shear = CheckButtons(ax_sliders[13], ["Use Shear"], [useShear])
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, iterations, iteration_strategy, predict_strategy, useSpeed
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, iterations, iteration_strategy, predict_strategy, useSpeed, useShear
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -437,12 +462,13 @@ def update(val):
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     Ray.tangent_scale = slider_tangent_scale.val
     useSpeed = checkbox_use_speed.get_status()[0]
+    useShear = checkbox_use_shear.get_status()[0]
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed, checkbox_use_shear]:
     c.on_clicked(update)
 
 # Initial draw
