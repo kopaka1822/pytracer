@@ -25,6 +25,17 @@ reflection_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
+reflection_scene2 = [
+    Plane([-3, 7], [3, 7]),
+    Plane([3, 0], [7, 0]),
+
+    # box around -10, 10
+    Plane([-10, -10], [-10, 10]),
+    Plane([-10, 10], [10, 10]),
+    Plane([10, 10], [10, -10]),
+    Plane([10, -10], [-10, -10]),
+]
+
 refraction_scene = [
 
     # two planes in center for glass
@@ -207,7 +218,7 @@ def methodRayDiff(C0, dir, hits):
     if iteration_strategy == 0:
         newDir = doVirtualIterations(C0, newDir, hits)
     if iteration_strategy == 1:
-        newDir = doRealIterations(C0, newDir, hits)
+        newDir = doRealIterations(C0, dir, newDir, hits)
     
     newDir /= np.linalg.norm(newDir)
 
@@ -289,8 +300,15 @@ def methodReflectAndShear(C0, dir, hits):
     newDir /= np.linalg.norm(newDir)
     draw_prediction(C0, newDir, hits)
 
-def doRealIterations(C0, newDir, hits):
+def doRealIterations(C0, dir, newDir, hits):
     P = hits[-1].P()
+    # normal of the final intersection plane at P
+    N = -dir
+    if len(hits) >= 2:
+        dir = hits[-2].P() - hits[-1].P()
+    
+    PPlane = Plane(P, P + [-N[1], N[0]])  # create plane orthogonal to dir at P
+
     bestDiff = float('inf')
     bestDir = newDir.copy()
 
@@ -302,27 +320,35 @@ def doRealIterations(C0, newDir, hits):
 
         # trace similar number of bounces as original ray
         for _ in range(len(hits) * 2):
+            phit = ray2.calcHit(PPlane, forceIntersect=True)
             hit = closestIntersect(ray2, prevPlane)
+
+            # last hit or T>0 and front face hit
+            testPPlane = hit is None or (phit.T() > 0 and np.dot(N, ray2.D()) < 0)
+
+            if testPPlane:
+                PStar = phit.P()
+                diff = np.linalg.norm(P - PStar)
+                if hit is not None:
+                    diff += np.linalg.norm(PStar - hit.P())
+
+                if diff < bestDiff:
+                    bestDiff = diff
+                    bestDir = initial_dir.copy()
+
+                    # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
+                    dP = ray2.transfer(phit).dP()
+                    s = solveLinearEq(dP, P - PStar)
+                    
+                    # update newDir
+                    newDir = Ray(C0, initial_dir).shiftS(s).D()
+
             if hit is None:
-                break
+                break # finished with this iteration
+
             prevPlane = hit.Plane()
             ray2 = ray2.transfer(hit)
-            ray2 = ray2.sampleNext(hit)
-
-            # test for difference at each step
-            curP = ray2.P()
-            diff = np.linalg.norm(P - curP)
-            if diff < bestDiff:
-                bestDiff = diff
-                bestDir = initial_dir.copy()
-
-                # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
-                PStar = ray2.P()
-                dP = ray2.dP()
-                s = solveLinearEq(dP, P - PStar)
-                
-                # update newDir
-                newDir = Ray(C0, initial_dir).shiftS(s).D()
+            ray2 = ray2.sampleNext(hit)       
 
     return bestDir
 
@@ -337,9 +363,8 @@ def doVirtualIterations(C0, newDir, hits):
         # trace ray through all hits
         for hit in hits:
             hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
-            if hit2 is not None:
-                ray2 = ray2.transfer(hit2)
-                ray2 = ray2.sampleNext(hit2)
+            ray2 = ray2.transfer(hit2)
+            ray2 = ray2.sampleNext(hit2)
         
         # check final position
         curP = ray2.P()
