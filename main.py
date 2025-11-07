@@ -49,7 +49,7 @@ refraction_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
-planes = refraction_scene
+planes = reflection_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -311,12 +311,20 @@ def doRealIterations(C0, dir, newDir, hits):
 
     bestDiff = float('inf')
     bestDir = newDir.copy()
+    nextS = 0.0
+    fails = 0 # number of iterations without improvement
 
     # refine newDir over multiple iterations
     for _ in range(iterations):
-        initial_dir = newDir.copy()
-        ray2 = Ray(C0, initial_dir)
+        ray2 = Ray(C0, bestDir)
+        stepMultiplier = 1.0
+        if fails > 0:
+            exponent = ((-1) ** (fails)) * ((fails + 1) // 2)
+            stepMultiplier = pow(1.2, exponent)
+        ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
+        initial_dir = ray2.D().copy() # initial direction for this iteration
         prevPlane = None
+        foundBetter = False
 
         # trace similar number of bounces as original ray
         for _ in range(len(hits) * 2):
@@ -338,17 +346,19 @@ def doRealIterations(C0, dir, newDir, hits):
 
                     # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
                     dP = ray2.transfer(phit).dP()
-                    s = solveLinearEq(dP, P - PStar)
-                    
-                    # update newDir
-                    newDir = Ray(C0, initial_dir).shiftS(s).D()
+                    nextS = solveLinearEq(dP, P - PStar)
+                    foundBetter = True
 
             if hit is None:
                 break # finished with this iteration
 
             prevPlane = hit.Plane()
             ray2 = ray2.transfer(hit)
-            ray2 = ray2.sampleNext(hit)       
+            ray2 = ray2.sampleNext(hit)  
+
+        if not foundBetter:
+            fails += 1
+        else: fails = 0
 
     return bestDir
 
