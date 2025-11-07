@@ -121,11 +121,7 @@ def draw_scene():
 
     prevPlane = None
     ray = Ray(C1, dir)
-    ray2 = Ray(C0, dir)
-    lastS = 0.0 # last solution for ray2 differential
     hits = []
-    rayLength = 0.0
-    speed = 1.0
     # main loop
     for i in range(max_bounces):
         # Find the closest intersection
@@ -133,55 +129,59 @@ def draw_scene():
         if hit is None:
             break
         hits.append(hit)
-        #rayLength += speed * hit.T()
-        rayLength += hit.T()
-        if useSpeed:
-            rayLength = rayLength / ray.eta(hit)
 
         # Draw the ray to the hit point
         ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-', label=LABEL_RAY if i == 0 else None)
 
         # Transfer the ray to the hit point
         ray = ray.transfer(hit)
-        #if useSpeed:
-        #    speed *= ray.eta(hit)
-        cosalpha = abs(np.dot(ray.D(), hit.Plane().N()))
         ray = ray.sampleNext(hit)
-        cosbeta = abs(np.dot(ray.D(), hit.Plane().N()))
-        if useSpeed:
-            speed *= cosalpha / cosbeta
-
         prevPlane = hit.Plane()
 
-        # intersect ray2 with the same plane
-        hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
-        if hit2 is not None:
-            if draw_guess:
-                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if i == 0 else None)
-            # update ray2
-            prevP = ray2.P() + ray2.dP()
-            ray2 = ray2.transfer(hit2)
-            curP = ray2.P() + ray2.dP()
-            # draw ray differential segment
-            if draw_differentials:
-                ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if i == 0 else None)
-
-            ray2 = ray2.sampleNext(hit2)
-
-            if draw_differentials:
-                # debug D + dD
-                ax.arrow(ray2.P()[0] + ray2.dP()[0], ray2.P()[1] + ray2.dP()[1], ray2.D()[0] + ray2.dD()[0], ray2.D()[1] + ray2.dD()[1], head_width=0.2, color='orange', length_includes_head=True)
-
-            # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
-            P = ray.P()
-            PStar = ray2.P()
-            dP = ray2.dP()
-            s = solveLinearEq(dP, P - PStar)
-            lastS = s
-
-    # draw point P, PStar and dP
+    # draw point P
     ax.plot(ray.P()[0], ray.P()[1], 'go')
     ax.text(ray.P()[0]+0.2, ray.P()[1]+0.2, "P", color='g')
+    
+    if predict_strategy == 0:
+        methodRayDiff(C0, dir, hits)
+    if predict_strategy == 1:
+        methodRayLength(C0, C1, dir, hits)
+    
+
+    ax.legend(loc="upper right")
+    fig.canvas.draw_idle()
+
+def methodRayDiff(C0, dir, hits):
+    ray2 = Ray(C0, dir)
+    lastS = 0.0 # last solution for ray2 differential
+    for hit in hits:
+        # intersect ray2 with the same plane
+        hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
+        assert hit2 is not None
+        if draw_guess:
+            ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if hit == hits[0] else None)
+        # update ray2
+        prevP = ray2.P() + ray2.dP()
+        ray2 = ray2.transfer(hit2)
+        curP = ray2.P() + ray2.dP()
+        # draw ray differential segment
+        if draw_differentials:
+            ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
+
+        ray2 = ray2.sampleNext(hit2)
+
+        if draw_differentials:
+            # debug D + dD
+            ax.arrow(ray2.P()[0] + ray2.dP()[0], ray2.P()[1] + ray2.dP()[1], ray2.D()[0] + ray2.dD()[0], ray2.D()[1] + ray2.dD()[1], head_width=0.2, color='orange', length_includes_head=True)
+
+        # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
+        P = hit.P()
+        PStar = ray2.P()
+        dP = ray2.dP()
+        s = solveLinearEq(dP, P - PStar)
+        lastS = s
+
+    # draw P* and differentials
     if draw_guess:
         ax.plot(ray2.P()[0], ray2.P()[1], 'bo')
         ax.text(ray2.P()[0]+0.2, ray2.P()[1]+0.2, "P*", color='b')
@@ -200,23 +200,35 @@ def draw_scene():
 
     # use lastS to determine the new ray2 initial direction.
     initial_ray = Ray(C0, dir)
-    if predict_strategy == 0:
-        newDir = initial_ray.shiftS(lastS).D()
-        if iteration_strategy == 0:
-            newDir = doVirtualIterations(C0, newDir, hits)
-        if iteration_strategy == 1:
-            newDir = doRealIterations(C0, newDir, hits)
-    if predict_strategy == 1:
-        newDir = C1 + dir * rayLength - C0
+    newDir = initial_ray.shiftS(lastS).D()
+    if iteration_strategy == 0:
+        newDir = doVirtualIterations(C0, newDir, hits)
+    if iteration_strategy == 1:
+        newDir = doRealIterations(C0, newDir, hits)
+    
     newDir /= np.linalg.norm(newDir)
 
-    if predict_strategy == 0 and iteration_strategy == 1:
+    if iteration_strategy == 1:
         trace_and_draw_actual(C0, newDir, hits)
     else:
         draw_prediction(C0, newDir, hits)
 
-    ax.legend(loc="upper right")
-    fig.canvas.draw_idle()
+def methodRayLength(C0, C1, dir, hits):
+    rayLength = 0.0
+    speed = 1.0
+    ray = Ray(C1, dir) # only used for tracking direction
+    for hit in hits:
+        rayLength += hit.T()
+        if useSpeed:
+            rayLength = rayLength / speed
+        cosalpha = abs(np.dot(ray.D(), hit.Plane().N()))
+        ray = ray.transfer(hit)
+        ray = ray.sampleNext(hit)
+        cosbeta = abs(np.dot(ray.D(), hit.Plane().N()))
+        speed *= cosalpha / cosbeta
+
+    newDir = C1 + dir * rayLength - C0
+    draw_prediction(C0, newDir, hits)
 
 def doRealIterations(C0, newDir, hits):
     P = hits[-1].P()
