@@ -49,7 +49,7 @@ refraction_scene = [
     Plane([10, -10], [-10, -10]),
 ]
 
-planes = reflection_scene
+planes = refraction_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -314,6 +314,8 @@ def doRealIterations(C0, dir, newDir, hits):
     nextS = 0.0
     fails = 0 # number of iterations without improvement
 
+    LastPlaneN = hits[-1].Plane().N() * (-1 if np.dot(hits[-1].Plane().N(), N) < 0 else 1)
+
     # refine newDir over multiple iterations
     for _ in range(iterations):
         ray2 = Ray(C0, bestDir)
@@ -333,7 +335,8 @@ def doRealIterations(C0, dir, newDir, hits):
 
             # last hit or T>0 and front face hit
             testPPlane = hit is None or (phit.T() > 0 and np.dot(N, ray2.D()) < 0)
-
+            #testPPlane = hit is None or (phit.T() > 0 and np.dot(LastPlaneN, ray2.D()) < 0)
+            
             if testPPlane:
                 PStar = phit.P()
                 diff = np.linalg.norm(P - PStar)
