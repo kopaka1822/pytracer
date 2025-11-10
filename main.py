@@ -9,6 +9,33 @@ from hit import Hit
 # Scene setup: finite line segments
 # ---------------------------------------------------------------
 
+# adds the circle located at P with (2D) radius r.x r.y to the planes list
+def addCircle(planes, P, r, faceOutside, ior, numSegments=16):
+    for i in range(numSegments):
+        theta1 = (i / numSegments) * 2 * np.pi
+        theta2 = ((i + 1) / numSegments) * 2 * np.pi
+        p1 = P + r * np.array([np.cos(theta1), np.sin(theta1)])
+        p2 = P + r * np.array([np.cos(theta2), np.sin(theta2)])
+        if not faceOutside:
+            planes.append(Plane(p1, p2, ior=ior))
+        else:
+            planes.append(Plane(p2, p1, ior=ior))
+
+def addBox(planes, Pmin, Pmax, faceOutside = True, ior=1.0):
+    corners = [
+        np.array([Pmin[0], Pmin[1]]),
+        np.array([Pmax[0], Pmin[1]]),
+        np.array([Pmax[0], Pmax[1]]),
+        np.array([Pmin[0], Pmax[1]]),
+    ]
+    for i in range(4):
+        p1 = corners[i]
+        p2 = corners[(i + 1) % 4]
+        if not faceOutside:
+            planes.append(Plane(p1, p2, ior=ior))
+        else:
+            planes.append(Plane(p2, p1, ior=ior))
+
 reflection_scene = [
     Plane([-10, -5], [10, -5]),       # bottom
     Plane([-8, -3], [-3, -1]),        # slanted left
@@ -16,40 +43,29 @@ reflection_scene = [
     Plane([-5, 5], [-2, 8]),          # upper left
     Plane([2, 7], [5, 5]),            # upper right
     Plane([-1, 8], [1, 8]),           # top
-
-
-    # box around -10, 10
-    Plane([-10, -10], [-10, 10]),
-    Plane([-10, 10], [10, 10]),
-    Plane([10, 10], [10, -10]),
-    Plane([10, -10], [-10, -10]),
 ]
+addBox(reflection_scene, [-10, -10], [10, 10])
 
 reflection_scene2 = [
     Plane([-3, 7], [3, 7]),
     Plane([3, 0], [7, 0]),
-
-    # box around -10, 10
-    Plane([-10, -10], [-10, 10]),
-    Plane([-10, 10], [10, 10]),
-    Plane([10, 10], [10, -10]),
-    Plane([10, -10], [-10, -10]),
 ]
+addBox(reflection_scene2, [-10, -10], [10, 10])
 
 refraction_scene = [
 
     # two planes in center for glass
     Plane([-10, 2], [10, 2], ior=1.5),
     Plane([10, 0], [-10, -1], ior=1.5),
-
-    # box around -10, 10
-    Plane([-10, -10], [-10, 10]),
-    Plane([-10, 10], [10, 10]),
-    Plane([10, 10], [10, -10]),
-    Plane([10, -10], [-10, -10]),
 ]
+addBox(refraction_scene, [-10, -10], [10, 10])
 
-planes = refraction_scene
+refraction_scene2 = []
+addBox(refraction_scene2, [-10, -10], [10, 10])
+addCircle(refraction_scene2, [0, 0], [2, 2], faceOutside=True, ior=1.5, numSegments=32)
+addCircle(refraction_scene2, [0, 0], [1.5, 1.5], faceOutside=False, ior=1.5, numSegments=32)
+
+planes = refraction_scene2
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
@@ -79,11 +95,12 @@ C0 = np.array([-10, 2.15])
 C1 = np.array([-8.55, 4.5])
 C1_angle = -46.8  # in degrees
 max_bounces = 3
-draw_differentials = True
+draw_differentials = False
 draw_guess = True
+draw_normals = False
 iterations = 1
 iteration_strategies = ["Virtual iterations", "Real iterations"]
-iteration_strategy = 0  # index into iteration_strategies
+iteration_strategy = 1  # index into iteration_strategies
 predict_strategies = ["ray diff", "ray length", "reflect and shear"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
@@ -114,10 +131,11 @@ def draw_scene():
         P1, P2 = pl.P1(), pl.P2()
         ax.plot([P1[0], P2[0]], [P1[1], P2[1]], 'k-', lw=1.5)
         # draw normal at midpoint
-        mid = (P1 + P2) / 2
-        N = pl.N()
-        ax.arrow(mid[0], mid[1], N[0]*0.8, N[1]*0.8,
-                 head_width=0.2, color='r', length_includes_head=True)
+        if draw_normals:
+            mid = (P1 + P2) / 2
+            N = pl.N()
+            ax.arrow(mid[0], mid[1], N[0]*0.8, N[1]*0.8,
+                     head_width=0.2, color='r', length_includes_head=True)
 
     # Draw cameras
     ax.plot(C0[0], C0[1], 'bo')
@@ -317,19 +335,22 @@ def doRealIterations(C0, dir, newDir, hits):
     LastPlaneN = hits[-1].Plane().N() * (-1 if np.dot(hits[-1].Plane().N(), N) < 0 else 1)
 
     # refine newDir over multiple iterations
-    for _ in range(iterations):
+    for i in range(iterations):
         ray2 = Ray(C0, bestDir)
         stepMultiplier = 1.0
         if fails > 0:
             exponent = ((-1) ** (fails)) * ((fails + 1) // 2)
             stepMultiplier = pow(1.2, exponent)
+            print(f"Iteration {i+1}: no improvement for {fails} iterations, adjusting stepMultiplier to {stepMultiplier}")
+        else:
+            print(f"Iteration {i+1}: improving")
         ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
         initial_dir = ray2.D().copy() # initial direction for this iteration
         prevPlane = None
         foundBetter = False
 
         # trace similar number of bounces as original ray
-        for _ in range(len(hits) * 2):
+        for _ in range(len(hits) + 2):
             phit = ray2.calcHit(PPlane, forceIntersect=True)
             hit = closestIntersect(ray2, prevPlane)
 
@@ -339,9 +360,9 @@ def doRealIterations(C0, dir, newDir, hits):
             
             if testPPlane:
                 PStar = phit.P()
-                diff = np.linalg.norm(P - PStar)
+                diff = np.linalg.norm(P - PStar)**2
                 if hit is not None:
-                    diff += np.linalg.norm(PStar - hit.P())
+                    diff += np.linalg.norm(PStar - hit.P())**2
 
                 if diff < bestDiff:
                     bestDiff = diff
@@ -357,11 +378,15 @@ def doRealIterations(C0, dir, newDir, hits):
 
             prevPlane = hit.Plane()
             ray2 = ray2.transfer(hit)
-            ray2 = ray2.sampleNext(hit)  
+            ray2 = ray2.sampleNext(hit) 
+            if ray2 is None: break # refraction not possible 
 
         if not foundBetter:
             fails += 1
         else: fails = 0
+
+    if foundBetter:
+        print(f"Improvement on last iteration found")
 
     return bestDir
 
@@ -416,7 +441,7 @@ def trace_and_draw_actual(C0, dir, hits):
     index = 0
 
     # draw actual ray2 path
-    for _ in range(len(hits) * 2):
+    for _ in range(len(hits) + 2):
         hit = closestIntersect(ray2, prevPlane)
         if hit is None:
             break
@@ -446,6 +471,7 @@ ax_sliders = [
     fig.add_axes([0.75, 0.95, 0.2, 0.03]),  # C1.x (moved up)
     fig.add_axes([0.75, 0.90, 0.2, 0.03]),  # C1.y
     fig.add_axes([0.75, 0.85, 0.2, 0.03]),  # C1 angle
+    fig.add_axes([0.75, 0.80, 0.2, 0.03]),  # Draw Normals checkbox
     fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # C0.x
     fig.add_axes([0.75, 0.70, 0.2, 0.03]),  # C0.y
     fig.add_axes([0.75, 0.65, 0.2, 0.03]),  # Ray.tangent_scale
@@ -462,31 +488,32 @@ ax_sliders = [
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
 slider_C1y = Slider(ax_sliders[1], "C1.y", -10.0, 10.0, valinit=C1[1])
 slider_C1a = Slider(ax_sliders[2], "C1.angle", -180.0, 180.0, valinit=C1_angle)
-slider_C0x = Slider(ax_sliders[3], "C0.x", -10.0, 10.0, valinit=C0[0])
-slider_C0y = Slider(ax_sliders[4], "C0.y", -10.0, 10.0, valinit=C0[1])
-slider_tangent_scale = Slider(ax_sliders[5], "Ray.tangent_scale", 0.001, 0.5, valinit=Ray.tangent_scale)
+checkbox_draw_normals = CheckButtons(ax_sliders[3], ["Draw Normals"], [draw_normals])
+slider_C0x = Slider(ax_sliders[4], "C0.x", -10.0, 10.0, valinit=C0[0])
+slider_C0y = Slider(ax_sliders[5], "C0.y", -10.0, 10.0, valinit=C0[1])
+slider_tangent_scale = Slider(ax_sliders[6], "Ray.tangent_scale", 0.001, 0.5, valinit=Ray.tangent_scale)
 # integer slider for max bounces
-slider_max_bounces = Slider(ax_sliders[6], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
+slider_max_bounces = Slider(ax_sliders[7], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
 # checkbox for draw differentials and guess
-checkbox_draw_differentials = CheckButtons(ax_sliders[7], ["Draw Differentials"], [draw_differentials])
-checkbox_draw_guess = CheckButtons(ax_sliders[8], ["Draw Guess"], [draw_guess])
+checkbox_draw_differentials = CheckButtons(ax_sliders[8], ["Draw Differentials"], [draw_differentials])
+checkbox_draw_guess = CheckButtons(ax_sliders[9], ["Draw Guess"], [draw_guess])
 # integer slider for iterations
-slider_iterations = Slider(ax_sliders[9], "Iterations ", 1, 20, valinit=iterations, valstep=1)
+slider_iterations = Slider(ax_sliders[10], "Iterations ", 1, 20, valinit=iterations, valstep=1)
 # radio buttons for iteration strategy
-radio_iteration_strategy = RadioButtons(ax_sliders[10], iteration_strategies, active=iteration_strategy)
+radio_iteration_strategy = RadioButtons(ax_sliders[11], iteration_strategies, active=iteration_strategy)
 # radio buttons for predict strategy
-radio_predict_strategy = RadioButtons(ax_sliders[11], predict_strategies, active=predict_strategy)
+radio_predict_strategy = RadioButtons(ax_sliders[12], predict_strategies, active=predict_strategy)
 # checkbox for use speed
-checkbox_use_speed = CheckButtons(ax_sliders[12], ["Use Speed"], [useSpeed])
+checkbox_use_speed = CheckButtons(ax_sliders[13], ["Use Speed"], [useSpeed])
 # checkbox for use shear
-checkbox_use_shear = CheckButtons(ax_sliders[13], ["Use Shear"], [useShear])
+checkbox_use_shear = CheckButtons(ax_sliders[14], ["Use Shear"], [useShear])
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, iterations, iteration_strategy, predict_strategy, useSpeed, useShear
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, useSpeed, useShear
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -495,6 +522,7 @@ def update(val):
     max_bounces = int(slider_max_bounces.val)
     draw_differentials = checkbox_draw_differentials.get_status()[0]
     draw_guess = checkbox_draw_guess.get_status()[0]
+    draw_normals = checkbox_draw_normals.get_status()[0]
     iterations = int(slider_iterations.val)
     iteration_strategy = iteration_strategies.index(radio_iteration_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
@@ -506,7 +534,7 @@ def update(val):
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed, checkbox_use_shear]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed, checkbox_use_shear]:
     c.on_clicked(update)
 
 # Initial draw
