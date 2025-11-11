@@ -68,7 +68,7 @@ class Ray:
         return Ray(hit.P(), self._D, dPNew, self._dD)
 
     def reflect(self, hit: Hit) -> "Ray":
-        N = hit.Plane().N()
+        N = hit.ShadingN()
         D = self._D
         R = D - 2 * np.dot(D, N) * N
         dN = 0 # assume zero normal differentials for planes
@@ -97,11 +97,11 @@ class Ray:
             return 1.0 / hit.Plane().Ior()
 
     def refract(self, hit: Hit) -> "Ray | None":
-        N = hit.Plane().N()
+        N = hit.ShadingN()
         eta = 1.0 / hit.Plane().Ior()
         D = self._D
 
-        if np.dot(N, -D) < 0:
+        if np.dot(hit.Plane().N(), -D) < 0: # test with actual plane normal
             # flip
             N = -N
             eta = hit.Plane().Ior()

@@ -10,6 +10,12 @@ class Hit:
 
     def Plane(self) -> Plane:
         return self._plane
+    
+    def ShadingN(self) -> np.ndarray:
+        return self._plane.ShadingN(self._point)
+    
+    def UnnormalizedShadingN(self) -> np.ndarray:
+        return self._plane.UnnormalizedShadingN(self._point)
 
     def P(self) -> np.ndarray:
         return self._point
