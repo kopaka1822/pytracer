@@ -14,12 +14,16 @@ def addCircle(planes, P, r, faceOutside, ior, numSegments=16):
     for i in range(numSegments):
         theta1 = (i / numSegments) * 2 * np.pi
         theta2 = ((i + 1) / numSegments) * 2 * np.pi
+        theta0 = ((i - 1) / numSegments) * 2 * np.pi
+        theta3 = ((i + 2) / numSegments) * 2 * np.pi
+        p0 = P + r * np.array([np.cos(theta0), np.sin(theta0)])
         p1 = P + r * np.array([np.cos(theta1), np.sin(theta1)])
         p2 = P + r * np.array([np.cos(theta2), np.sin(theta2)])
+        p3 = P + r * np.array([np.cos(theta3), np.sin(theta3)])
         if not faceOutside:
-            planes.append(Plane(p1, p2, ior=ior))
+            planes.append(Plane(p1, p2, ior=ior, P0=p0, P3=p3))
         else:
-            planes.append(Plane(p2, p1, ior=ior))
+            planes.append(Plane(p2, p1, ior=ior, P0=p3, P3=p0))
 
 def addBox(planes, Pmin, Pmax, faceOutside = True, ior=1.0):
     corners = [
