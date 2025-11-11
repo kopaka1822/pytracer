@@ -56,6 +56,20 @@ class Plane:
     def ShadingN(self, P: np.ndarray) -> np.ndarray:
         unnormalized_N = self.UnnormalizedShadingN(P)
         return unnormalized_N / np.linalg.norm(unnormalized_N)
+    
+    def CalcDN(self, P, dP: np.ndarray) -> np.ndarray:
+        dir_vec = self._P2 - self._P1
+        total_length_sq = np.dot(dir_vec, dir_vec)
+        
+        if total_length_sq == 0:
+            return np.zeros(2)  # Avoid division by zero
+
+        dT = np.dot(dP, dir_vec) / total_length_sq
+        # change in unnormalized normal
+        dn = (self._normal2 - self._normal1) * dT
+        n = self.UnnormalizedShadingN(P)
+
+        return (dn * np.dot(n, n) - n * np.dot(n, dn)) / (np.dot(n, n) ** 1.5)
 
     def Ior(self) -> float:
         return self._ior
