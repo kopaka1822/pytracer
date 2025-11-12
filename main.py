@@ -533,6 +533,7 @@ ax_sliders = [
     fig.add_axes([0.75, 0.40, 0.2, 0.03]),  # iterations
     fig.add_axes([0.75, 0.28, 0.2, 0.1]),   # iteration strategy radio buttons
     fig.add_axes([0.75, 0.16, 0.2, 0.1]),   # predict strategy radio buttons
+    fig.add_axes([0.75, 0.11, 0.2, 0.05]),   # use N differentials
     fig.add_axes([0.75, 0.06, 0.2, 0.05]),   # use speed
     fig.add_axes([0.75, 0.01, 0.2, 0.05]),   # use shear
 ]
@@ -557,10 +558,12 @@ slider_iterations = Slider(ax_sliders[11], "Iterations ", 0, 20, valinit=iterati
 radio_iteration_strategy = RadioButtons(ax_sliders[12], iteration_strategies, active=iteration_strategy)
 # radio buttons for predict strategy
 radio_predict_strategy = RadioButtons(ax_sliders[13], predict_strategies, active=predict_strategy)
+# checkbox for use N differentials
+checkbox_use_n_differentials = CheckButtons(ax_sliders[14], ["Use N Diff."], [Ray.use_normal_differential])
 # checkbox for use speed
-checkbox_use_speed = CheckButtons(ax_sliders[14], ["Use Speed"], [useSpeed])
+checkbox_use_speed = CheckButtons(ax_sliders[15], ["Use Speed"], [useSpeed])
 # checkbox for use shear
-checkbox_use_shear = CheckButtons(ax_sliders[15], ["Use Shear"], [useShear])
+checkbox_use_shear = CheckButtons(ax_sliders[16], ["Use Shear"], [useShear])
 
 # ---------------------------------------------------------------
 # Slider callbacks
@@ -582,6 +585,7 @@ def update(val):
     iteration_strategy = iteration_strategies.index(radio_iteration_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     Ray.tangent_scale = slider_tangent_scale.val
+    Ray.use_normal_differential = checkbox_use_n_differentials.get_status()[0]
     useSpeed = checkbox_use_speed.get_status()[0]
     useShear = checkbox_use_shear.get_status()[0]
     draw_scene()
@@ -589,7 +593,7 @@ def update(val):
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed, checkbox_use_shear, checkbox_draw_last_iteration]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, radio_iteration_strategy, radio_predict_strategy, checkbox_use_speed, checkbox_use_shear, checkbox_draw_last_iteration, checkbox_use_n_differentials]:
     c.on_clicked(update)
 
 # Initial draw

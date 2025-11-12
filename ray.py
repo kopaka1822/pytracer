@@ -5,6 +5,7 @@ from plane import Plane
 class Ray:
     # static variables
     tangent_scale = 0.14
+    use_normal_differential = True
 
     def __init__(self, P: np.ndarray, D: np.ndarray, dP: np.ndarray | None = None, dD: np.ndarray | None = None):
         self._P = np.asarray(P, dtype=float)
@@ -70,6 +71,7 @@ class Ray:
     def reflect(self, hit: Hit) -> "Ray":
         N = hit.ShadingN()
         dN = hit.CalcDN(self._dP)
+        if not Ray.use_normal_differential: dN = 0.0
         D = self._D
         R = D - 2 * np.dot(D, N) * N
         dDN = np.dot(self._dD, N) + np.dot(D, dN)
@@ -98,6 +100,7 @@ class Ray:
     def refract(self, hit: Hit) -> "Ray | None":
         N = hit.ShadingN()
         dN = hit.CalcDN(self._dP)
+        if not Ray.use_normal_differential: dN = 0.0
         eta = 1.0 / hit.Plane().Ior()
         D = self._D
 
