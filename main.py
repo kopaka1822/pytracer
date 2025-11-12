@@ -115,6 +115,7 @@ def methodRayDiff(C0, dir, hits):
         # intersect ray2 with the same plane
         hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
         assert hit2 is not None
+        hit2.overwriteShadingN(hit.ShadingN()) # force the same shading normal to ensure that refraction/reflection is the same
         if draw_guess:
             ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if hit == hits[0] else None)
         # update ray2
@@ -187,7 +188,8 @@ def doRealIterations(C0, dir, newDir, hits):
     fails = 0 # number of iterations without improvement
 
     LastPlaneN = hits[-1].Plane().N() * (-1 if np.dot(hits[-1].Plane().N(), N) < 0 else 1)
-
+    onlyPositiveMultiplier = True # check if only positive multipliers have been used
+    print("-----------------------------------------------------------------------------")
     # refine newDir over multiple iterations
     for i in range(iterations):
         ray2 = Ray(C0, bestDir)
@@ -197,9 +199,8 @@ def doRealIterations(C0, dir, newDir, hits):
             sign = (-1) ** (fails+1)
             exponent = -((fails + 1) // 2)
             stepMultiplier = sign * pow(2.0, exponent)
-            print(f"Iteration {i+1}: no improvement for {fails} iterations, adjusting stepMultiplier to {stepMultiplier}")
-        else:
-            print(f"Iteration {i+1}: improving")
+            print(f"It: {i} no improvement, trying stepMultiplier={stepMultiplier}")
+
         ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
         initial_dir = ray2.D().copy() # initial direction for this iteration
         prevPlane = None
@@ -239,7 +240,6 @@ def doRealIterations(C0, dir, newDir, hits):
                     dP = ray2.transfer(phit).dP()
                     nextS = solveLinearEq(dP, P - PStar)
                     foundBetter = True
-                    print("   Found better solution with diff =", bestDiff, " nextS =", nextS)
 
             if hit is None:
                 break # finished with this iteration
@@ -251,10 +251,17 @@ def doRealIterations(C0, dir, newDir, hits):
 
         if not foundBetter:
             fails += 1
-        else: fails = 0
+        else:
+            if onlyPositiveMultiplier and stepMultiplier < 0:
+                onlyPositiveMultiplier = False
+            print(f"It: {i+1} found better solution with diff={bestDiff:.4g}, nextS={nextS:.4g} using stepMultiplier={stepMultiplier}.")
+            fails = 0
 
         if drawIteration:
             trace_and_draw_actual(C0, initial_dir, hits, color='red', label=LABEL_RAY2_ITERATION)
+
+    if not onlyPositiveMultiplier:
+        print("WARNING: negative step multipliers were used during real iterations.")
 
     return bestDir
 

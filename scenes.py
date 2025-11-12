@@ -62,21 +62,35 @@ refraction_scene = [
 ]
 addBox(refraction_scene, [-10, -10], [10, 10])
 
-refraction_scene2 = [
+glass_scene = [
     Plane([10, -10], [10, 20]), # wall on the right
     Plane([-10, -10], [10, -10]), # wall on the bottom
 ]
 #addBox(refraction_scene2, [-10, -10], [10, 10])
-addCircle(refraction_scene2, [0, 0], [2, 2], faceOutside=True, ior=1.5, numSegments=32)
-addCircle(refraction_scene2, [0, 0], [1.5, 1.5], faceOutside=False, ior=1.5, numSegments=32)
+addCircle(glass_scene, [0, 3], [2, 2], faceOutside=True, ior=1.5, numSegments=32)
+addCircle(glass_scene, [0, 3], [1.8, 1.8], faceOutside=False, ior=1.5, numSegments=32)
+
+glasses_scene = [
+    Plane([10, -40], [10, 40]), # wall on the right
+]
+# glass 1
+addCircle(glasses_scene, [0, 3], [1.2, 1.2], faceOutside=True, ior=1.5)
+addCircle(glasses_scene, [0, 3], [1, 1], faceOutside=False, ior=1.5)
+# glass 2
+addCircle(glasses_scene, [5, 1], [1.2, 1.2], faceOutside=True, ior=1.5)
+addCircle(glasses_scene, [5, 1], [1, 1], faceOutside=False, ior=1.5)
+# glass 3
+addCircle(glasses_scene, [5, 5], [1.2, 1.2], faceOutside=True, ior=1.5)
+addCircle(glasses_scene, [5, 5], [1, 1], faceOutside=False, ior=1.5)
 
 glass_globe_scene = [
-    Plane([10, -10], [10, 20]), # wall on the right
-    Plane([-10, -10], [10, -10]), # wall on the bottom
+    Plane([10, -40], [10, 40]), # wall on the right
+    #Plane([-10, -10], [10, -10]), # wall on the bottom
 ]
 addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegments=32)
 
-planes = glass_globe_scene
+# SET SCENE ---------------------------------------------- #
+planes = glasses_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
