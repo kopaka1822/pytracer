@@ -1,4 +1,7 @@
-from main import *
+import numpy as np
+from plane import Plane
+from ray import Ray
+from hit import Hit
 
 # ---------------------------------------------------------------
 # Scene setup: finite line segments
