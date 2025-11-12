@@ -14,8 +14,8 @@ class Hit:
     def ShadingN(self) -> np.ndarray:
         return self._plane.ShadingN(self._point)
     
-    def UnnormalizedShadingN(self) -> np.ndarray:
-        return self._plane.UnnormalizedShadingN(self._point)
+    def CalcDN(self, dP: np.ndarray) -> np.ndarray:
+        return self._plane.CalcDN(self._point, dP)
 
     def P(self) -> np.ndarray:
         return self._point

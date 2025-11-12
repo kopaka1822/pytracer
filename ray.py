@@ -69,12 +69,11 @@ class Ray:
 
     def reflect(self, hit: Hit) -> "Ray":
         N = hit.ShadingN()
+        dN = hit.CalcDN(self._dP)
         D = self._D
         R = D - 2 * np.dot(D, N) * N
-        dN = 0 # assume zero normal differentials for planes
         dDN = np.dot(self._dD, N) + np.dot(D, dN)
         dDNew = self._dD - 2 * (np.dot(D, N) * dN + dDN * N)
-        #dDNew = self._dD - 2 * np.dot(self._dD, N) * N # for dN = 0
         return Ray(hit.P(), R, self._dP, dDNew)
 
     def _refract(self, I, N, eta):
@@ -98,12 +97,14 @@ class Ray:
 
     def refract(self, hit: Hit) -> "Ray | None":
         N = hit.ShadingN()
+        dN = hit.CalcDN(self._dP)
         eta = 1.0 / hit.Plane().Ior()
         D = self._D
 
         if np.dot(hit.Plane().N(), -D) < 0: # test with actual plane normal
             # flip
             N = -N
+            dN = -dN
             eta = hit.Plane().Ior()
 
         Dnew = self._refract(D, N, eta)
@@ -111,11 +112,9 @@ class Ray:
             return None
 
         # ray diff
-        dN = 0
         mu = eta * np.dot(D, N) - np.dot(Dnew, N)
         dDN = np.dot(self._dD, N) + np.dot(D, dN)
-        dmu = (eta - (eta * eta * np.dot(D, N) / np.dot(Dnew, N))) * dDN # Note: falcor implementaion uses eta + eta * eta instead?
-        #dmu = (eta + (eta * eta * np.dot(D, N) / np.dot(Dnew, N))) * dDN # Note: falcors dot prodcut has inversed sign for Dnew => thats why its reversed.
+        dmu = (eta - (eta * eta * np.dot(D, N) / np.dot(Dnew, N))) * dDN
         dDNew = eta * self._dD - (mu * dN + dmu * N)
 
         return Ray(hit.P(), Dnew, self._dP, dDNew)
