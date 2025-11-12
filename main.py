@@ -75,6 +75,7 @@ def draw_scene():
              head_width=0.2, color='g', length_includes_head=True)
 
     prevPlane = None
+    lastP = C1
     ray = Ray(C1, dir)
     hits = []
     # main loop
@@ -90,20 +91,27 @@ def draw_scene():
 
         # Transfer the ray to the hit point
         ray = ray.transfer(hit)
+        lastP = ray.P()
         ray = ray.sampleNext(hit)
+        if ray is None:
+            break  # refraction not possible
         prevPlane = hit.Plane()
 
     # draw point P
-    ax.plot(ray.P()[0], ray.P()[1], 'go')
-    ax.text(ray.P()[0]+0.2, ray.P()[1]+0.2, "P", color='g')
-    
+    ax.plot(lastP[0], lastP[1], 'go')
+    ax.text(lastP[0]+0.2, lastP[1]+0.2, "P", color='g')
+
     if predict_strategy == 0:
-        methodRayDiff(C0, dir, hits)
+        newDir = methodRayDiff(C0, dir, hits)
     if predict_strategy == 1:
-        methodRayLength(C0, C1, dir, hits)
+        newDir = methodRayLength(C0, C1, dir, hits)
     if predict_strategy == 2:
-        methodReflectAndShear(C0, dir, hits)
+        newDir = methodReflectAndShear(C0, dir, hits)
     
+    if iteration_strategy == 1:
+        trace_and_draw_actual(C0, newDir, hits)
+    else: 
+        draw_prediction(C0, newDir, hits)
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
@@ -126,8 +134,6 @@ def methodRayDiff(C0, dir, hits):
         if draw_differentials and iterations == 0:
             ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
 
-        ray2 = ray2.sampleNext(hit2)
-
         if draw_differentials and iterations == 0:
             # debug D + dD
             ax.arrow(ray2.P()[0] + ray2.dP()[0], ray2.P()[1] + ray2.dP()[1], ray2.D()[0] + ray2.dD()[0], ray2.D()[1] + ray2.dD()[1], head_width=0.2, color='orange', length_includes_head=True)
@@ -138,6 +144,10 @@ def methodRayDiff(C0, dir, hits):
         dP = ray2.dP()
         s = solveLinearEq(dP, P - PStar)
         lastS = s
+
+        nextRay = ray2.sampleNext(hit2)
+        if nextRay is not None:
+            ray2 = nextRay
 
     # draw P* and differentials
     if draw_guess:
@@ -165,11 +175,7 @@ def methodRayDiff(C0, dir, hits):
         newDir = doRealIterations(C0, dir, newDir, hits)
     
     newDir /= np.linalg.norm(newDir)
-
-    if iteration_strategy == 1:
-        trace_and_draw_actual(C0, newDir, hits)
-    else:
-        draw_prediction(C0, newDir, hits)
+    return newDir
 
 def doRealIterations(C0, dir, newDir, hits):
     if len(hits) == 0:
@@ -196,9 +202,12 @@ def doRealIterations(C0, dir, newDir, hits):
         stepMultiplier = 1.0
         if fails > 0:
             #exponent = ((-1) ** (fails)) * ((fails + 1) // 2)
-            sign = (-1) ** (fails+1)
-            exponent = -((fails + 1) // 2)
-            stepMultiplier = sign * pow(2.0, exponent)
+            if Ray.use_normal_differential:
+                stepMultiplier = pow(2.0, -fails)
+            else:
+                sign = (-1) ** (fails+1)
+                exponent = -((fails + 1) // 2)
+                stepMultiplier = sign * pow(2.0, exponent)
             print(f"It: {i} no improvement, trying stepMultiplier={stepMultiplier}")
 
         ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
@@ -212,16 +221,11 @@ def doRealIterations(C0, dir, newDir, hits):
             phit = ray2.calcHit(PPlane, forceIntersect=True)
             hit = closestIntersect(ray2, prevPlane)
 
-            #if drawIteration:
-            #    p1 = ray2.P()
-            #    p2 = hit.P() if hit is not None else phit.P()
-            #    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], 'red', lw=2.0, label=LABEL_RAY2_ITERATION if iHit == 0 else None)
-
             # last hit or T>0 and front face hit
             #testPPlane = (hit is None) or (phit.T() > 0)
             testPPlane = (hit is None) or (phit.T() > 0 and np.dot(N, ray2.D()) < 0)
             #testPPlane = (hit is None) or (phit.T() > 0 and np.dot(LastPlaneN, ray2.D()) < 0)
-            
+
             if testPPlane:
                 PStar = phit.P()
                 diff = np.linalg.norm(P - PStar)**2
@@ -392,12 +396,21 @@ def methodRayLength(C0, C1, dir, hits):
             rayLength = rayLength / speed
         cosalpha = abs(np.dot(ray.D(), hit.Plane().N()))
         ray = ray.transfer(hit)
-        ray = ray.sampleNext(hit)
+        nextRay = ray.sampleNext(hit)
+        if nextRay is not None:
+            ray = nextRay
         cosbeta = abs(np.dot(ray.D(), hit.Plane().N()))
         speed *= cosalpha / cosbeta
 
+    if draw_guess:
+        end_point = C1 + dir * rayLength
+        ax.plot([C0[0], end_point[0]], [C0[1], end_point[1]], 'b-', label=LABEL_RAY2)
+        # print P* at end_point
+        ax.plot(end_point[0], end_point[1], 'bo')
+        ax.text(end_point[0]+0.2, end_point[1]+0.2, "P*", color='b')
+
     newDir = C1 + dir * rayLength - C0
-    draw_prediction(C0, newDir, hits)
+    return newDir
 
 # matrix multiplication
 def mul(A, B):
@@ -427,9 +440,15 @@ def methodReflectAndShear(C0, dir, hits):
     P = hits[-1].P()
     Pnew = mul(viewTransform, np.array([P[0], P[1], 1.0]))[:2]
 
+    if draw_guess:
+        ax.plot([C0[0], Pnew[0]], [C0[1], Pnew[1]], 'b-', label=LABEL_RAY2)
+        # print P* at Pnew
+        ax.plot(Pnew[0], Pnew[1], 'bo')
+        ax.text(Pnew[0]+0.2, Pnew[1]+0.2, "P*", color='b')
+
     newDir = Pnew - C0
     newDir /= np.linalg.norm(newDir)
-    draw_prediction(C0, newDir, hits)
+    return newDir
 
 # ---------------------------------------------------------------
 # Matplotlib setup
