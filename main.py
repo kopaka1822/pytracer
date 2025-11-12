@@ -4,95 +4,9 @@ from matplotlib.widgets import CheckButtons, Slider, RadioButtons
 from plane import Plane
 from ray import Ray
 from hit import Hit
-
-# ---------------------------------------------------------------
-# Scene setup: finite line segments
-# ---------------------------------------------------------------
-
-# adds the circle located at P with (2D) radius r.x r.y to the planes list
-def addCircle(planes, P, r, faceOutside, ior, numSegments=16):
-    for i in range(numSegments):
-        theta1 = (i / numSegments) * 2 * np.pi
-        theta2 = ((i + 1) / numSegments) * 2 * np.pi
-        theta0 = ((i - 1) / numSegments) * 2 * np.pi
-        theta3 = ((i + 2) / numSegments) * 2 * np.pi
-        p0 = P + r * np.array([np.cos(theta0), np.sin(theta0)])
-        p1 = P + r * np.array([np.cos(theta1), np.sin(theta1)])
-        p2 = P + r * np.array([np.cos(theta2), np.sin(theta2)])
-        p3 = P + r * np.array([np.cos(theta3), np.sin(theta3)])
-        if not faceOutside:
-            planes.append(Plane(p1, p2, ior=ior, P0=p0, P3=p3))
-        else:
-            planes.append(Plane(p2, p1, ior=ior, P0=p3, P3=p0))
-
-def addBox(planes, Pmin, Pmax, faceOutside = True, ior=1.0):
-    corners = [
-        np.array([Pmin[0], Pmin[1]]),
-        np.array([Pmax[0], Pmin[1]]),
-        np.array([Pmax[0], Pmax[1]]),
-        np.array([Pmin[0], Pmax[1]]),
-    ]
-    for i in range(4):
-        p1 = corners[i]
-        p2 = corners[(i + 1) % 4]
-        if not faceOutside:
-            planes.append(Plane(p1, p2, ior=ior))
-        else:
-            planes.append(Plane(p2, p1, ior=ior))
-
-reflection_scene = [
-    Plane([-10, -5], [10, -5]),       # bottom
-    Plane([-8, -3], [-3, -1]),        # slanted left
-    Plane([3, -1], [8, -3]),          # slanted right
-    Plane([-5, 5], [-2, 8]),          # upper left
-    Plane([2, 7], [5, 5]),            # upper right
-    Plane([-1, 8], [1, 8]),           # top
-]
-addBox(reflection_scene, [-10, -10], [10, 10])
-
-reflection_scene2 = [
-    Plane([-3, 7], [3, 7]),
-    Plane([3, 0], [7, 0]),
-]
-addBox(reflection_scene2, [-10, -10], [10, 10])
-
-refraction_scene = [
-
-    # two planes in center for glass
-    Plane([-10, 2], [10, 2], ior=1.5),
-    Plane([10, 0], [-10, -1], ior=1.5),
-]
-addBox(refraction_scene, [-10, -10], [10, 10])
-
-refraction_scene2 = [
-    Plane([10, -10], [10, 20]), # wall on the right
-    Plane([-10, -10], [10, -10]), # wall on the bottom
-]
-#addBox(refraction_scene2, [-10, -10], [10, 10])
-addCircle(refraction_scene2, [0, 0], [2, 2], faceOutside=True, ior=1.5, numSegments=32)
-addCircle(refraction_scene2, [0, 0], [1.5, 1.5], faceOutside=False, ior=1.5, numSegments=32)
-
-glass_globe_scene = [
-    Plane([10, -10], [10, 20]), # wall on the right
-    Plane([-10, -10], [10, -10]), # wall on the bottom
-]
-addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegments=32)
-
-planes = glass_globe_scene
-
-def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
-    closest_hit = None
-    min_t = float('inf')
-
-    for pl in planes:
-        if pl is prevPlane:
-            continue
-        hit = ray.calcHit(pl)
-        if hit is not None and hit.T() < min_t:
-            min_t = hit.T()
-            closest_hit = hit
-
-    return closest_hit
+from reflectshear import *
+from main import *
+from scenes import *
 
 # solves A * s = B for scalar s
 def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
@@ -138,8 +52,6 @@ def draw_scene():
     ax.set_aspect('equal')
     ax.set_title("Ray Differential Motion Vector")
     ax.grid(True, linestyle="--", alpha=0.3)
-
-
 
     # Draw finite planes
     for pl in planes:
@@ -259,79 +171,6 @@ def methodRayDiff(C0, dir, hits):
         trace_and_draw_actual(C0, newDir, hits)
     else:
         draw_prediction(C0, newDir, hits)
-
-# mirrors scene at plane with 2D location O and 2D normal N (return 3x3 matrix)
-def matrixMirror(O, N):
-    nx, ny = N
-    ox, oy = O
-    d = nx * ox + ny * oy
-    M = np.array([
-        [1 - 2*nx*nx,   -2*nx*ny,    2*nx*d],
-        [-2*nx*ny,      1 - 2*ny*ny, 2*ny*d],
-        [0,             0,           1]
-    ])
-    return M
-
-# performs a shear transformation about point O with normal N and shear factor s
-def matrixShear(O, N, s):
-    nx, ny = N
-    ox, oy = O
-    d = nx * ox + ny * oy
-    M = np.array([
-        [1 - s*nx*ny, -s*ny*ny,  s*ny*d],
-        [ s*nx*nx, 1 + s*nx*ny, -s*nx*d],
-        [0, 0, 1]
-    ])
-    return M
-
-def methodRayLength(C0, C1, dir, hits):
-    rayLength = 0.0
-    speed = 1.0
-    ray = Ray(C1, dir) # only used for tracking direction
-    for hit in hits:
-        rayLength += hit.T()
-        if useSpeed:
-            rayLength = rayLength / speed
-        cosalpha = abs(np.dot(ray.D(), hit.Plane().N()))
-        ray = ray.transfer(hit)
-        ray = ray.sampleNext(hit)
-        cosbeta = abs(np.dot(ray.D(), hit.Plane().N()))
-        speed *= cosalpha / cosbeta
-
-    newDir = C1 + dir * rayLength - C0
-    draw_prediction(C0, newDir, hits)
-
-# matrix multiplication
-def mul(A, B):
-    return np.matmul(A, B)
-
-def methodReflectAndShear(C0, dir, hits):
-    # initialize viewTransform with a 3x3 identity matrix
-    viewTransform = np.identity(3)
-    ray = Ray(C1, dir) # only used for tracking direction
-    for hit in hits[:-1]:
-        I = -ray.D() # incomming direction
-        eta = ray.eta(hit)
-        ray = ray.transfer(hit).sampleNext(hit)
-        R = ray.D() # outgoing direction
-        H = (I + R) / np.linalg.norm(I + R)  # half-vector
-        refraction = hit.Plane().Ior() != 1.0
-        if useShear and refraction:
-            # compute shear factor s
-            cosalpha = abs(np.dot(I, hit.Plane().N()))
-            cosbeta = abs(np.dot(R, hit.Plane().N()))
-            sinalpha = np.sqrt(1 - cosalpha * cosalpha)
-            s = sinalpha * (cosbeta - eta * cosalpha) / (cosalpha * cosbeta)
-            viewTransform = mul(viewTransform, matrixShear(hit.P(), hit.Plane().N(), s))
-        else:
-            viewTransform = mul(viewTransform, matrixMirror(hit.P(), H))
-
-    P = hits[-1].P()
-    Pnew = mul(viewTransform, np.array([P[0], P[1], 1.0]))[:2]
-
-    newDir = Pnew - C0
-    newDir /= np.linalg.norm(newDir)
-    draw_prediction(C0, newDir, hits)
 
 def doRealIterations(C0, dir, newDir, hits):
     if len(hits) == 0:
