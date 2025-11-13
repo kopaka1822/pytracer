@@ -1,7 +1,7 @@
 import numpy as np
 
 class Plane:
-
+    # ior: 1.0 = only reflection, 0.0 = absorb, 0<ior<1.0 and ior>1.0 refraction
     def __init__(self, P1: np.ndarray, P2: np.ndarray, ior: float = 1.0, P0: np.ndarray = None, P3: np.ndarray = None):
         self._P1 = np.asarray(P1, dtype=float)
         self._P2 = np.asarray(P2, dtype=float)

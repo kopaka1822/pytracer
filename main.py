@@ -31,6 +31,7 @@ predict_strategy = 0  # index into predict_strategies
 useSpeed = False
 useShear = True
 draw_last_iteration = True
+EXTRA_BOUNCES = 2 # allowed number of extra bounces during real iterations
 
 # labels
 LABEL_RAY = "original"
@@ -192,31 +193,36 @@ def doRealIterations(C0, dir, newDir, hits):
     fails = 0 # number of iterations without improvement
 
     onlyPositiveMultiplier = True # check if only positive multipliers have been used
+    stepMultiplier = 1.0
     print("-----------------------------------------------------------------------------")
     # refine newDir over multiple iterations
     for i in range(iterations):
         ray2 = Ray(C0, bestDir)
-        stepMultiplier = 1.0
         if fails > 0:
             #exponent = ((-1) ** (fails)) * ((fails + 1) // 2)
             if Ray.use_normal_differential:
-                stepMultiplier = pow(2.0, -fails)
+                #stepMultiplier = pow(2.0, -fails)
+                stepMultiplier = stepMultiplier * 0.5
             else:
                 sign = (-1) ** (fails+1)
                 exponent = -((fails + 1) // 2)
                 stepMultiplier = sign * pow(2.0, exponent)
             print(f"It: {i} no improvement (diff={lastBestDiff:.4g}, steps={lastNumSteps}), trying stepMultiplier={stepMultiplier}")
+        else:
+            if Ray.use_normal_differential:
+                stepMultiplier = min(1.0, stepMultiplier * 2.0) # try to increase step size again (like bitterli)
+            else:
+                stepMultiplier = 1.0
 
         ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
         initial_dir = ray2.D().copy() # initial direction for this iteration
         prevPlane = None
         foundBetter = False
-        drawIteration = (i + 1) == iterations and draw_last_iteration
         lastBestDiff = float('inf')
         lastNumSteps = 0
 
         # trace similar number of bounces as original ray
-        for iHit in range(len(hits) + 2):
+        for iHit in range(len(hits) + EXTRA_BOUNCES):
             phit = ray2.calcHit(PPlane, forceIntersect=True)
             hit = closestIntersect(ray2, prevPlane)
 
@@ -255,20 +261,20 @@ def doRealIterations(C0, dir, newDir, hits):
 
             prevPlane = hit.Plane()
             ray2 = ray2.transfer(hit)
-            ray2 = ray2.sampleNext(hit) 
+            ray2 = ray2.sampleNext(hit)
             if ray2 is None: break # refraction not possible 
 
         if not foundBetter:
             fails += 1
             if (i + 1) == iterations:
-                print(f"It: {i+1} no improvement with diff={lastBestDiff:.4g}, steps={lastNumSteps}.")
+                print(f"It: {i+1} no improvement (diff={lastBestDiff:.4g}, steps={lastNumSteps})")
         else:
             if onlyPositiveMultiplier and stepMultiplier < 0:
                 onlyPositiveMultiplier = False
             print(f"It: {i+1} found better solution with diff={bestDiff:.4g}, steps={lastNumSteps}, nextS={nextS:.4g} using stepMultiplier={stepMultiplier}.")
             fails = 0
 
-        if drawIteration:
+        if draw_last_iteration and (i + 1) == iterations:
             trace_and_draw_actual(C0, initial_dir, hits, color='red', label=LABEL_RAY2_ITERATION)
 
     if not onlyPositiveMultiplier:
@@ -330,6 +336,9 @@ def draw_prediction(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
 
             ray2 = ray2.sampleNext(hit2)
             if ray2 is None:
+                if hit2.Plane().Ior() != 0.0:
+                    # draw x to indicate that path ended due to refraction failure
+                    ax.plot(hit2.P()[0], hit2.P()[1], 'rx', markersize=12)
                 break # refraction not possible
 
 def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
@@ -345,7 +354,7 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
     index = 0
 
     # draw actual ray2 path
-    for _ in range(len(hits) + 2):
+    for _ in range(len(hits) + EXTRA_BOUNCES):
         hit = closestIntersect(ray2, prevPlane)
         if hit is None:
             break

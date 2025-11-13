@@ -123,6 +123,8 @@ class Ray:
         return Ray(hit.P(), Dnew, self._dP, dDNew)
 
     def sampleNext(self, hit: Hit) -> "Ray | None":
+        if hit.Plane().Ior() == 0.0:
+            return None # absorb: no next ray
         if hit.Plane().Ior() == 1.0:
             return self.reflect(hit)
         else:
