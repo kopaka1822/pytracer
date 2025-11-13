@@ -109,10 +109,11 @@ def draw_scene():
     if predict_strategy == 2:
         newDir = methodReflectAndShear(C0, dir, hits)
     
-    if iteration_strategy == 1:
-        trace_and_draw_actual(C0, newDir, hits)
-    else: 
-        draw_prediction(C0, newDir, hits)
+    #if iteration_strategy == 1:
+    # always draw actual path
+    trace_and_draw_actual(C0, newDir, hits)
+    #else: 
+    #    draw_prediction(C0, newDir, hits)
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
@@ -288,13 +289,24 @@ def doVirtualIterations(C0, newDir, hits):
     bestDir = newDir.copy()
 
     # refine newDir over multiple iterations
-    for _ in range(iterations):
+    for i in range(iterations):
         ray2 = Ray(C0, newDir)
         # trace ray through all hits
         for hit in hits:
             hit2 = ray2.calcHit(hit.Plane(), forceIntersect=True)
+            hit2.overwriteShadingN(hit.ShadingN()) # force the same shading normal to ensure that refraction/reflection is the same (for virtual iterations)
+            if draw_last_iteration and (i + 1) == iterations:
+                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=LABEL_RAY2_ITERATION if hit == hits[0] else None)
+
+            prevP = ray2.P() + ray2.dP() # for differential
             ray2 = ray2.transfer(hit2)
-            ray2 = ray2.sampleNext(hit2)
+            curP = ray2.P() + ray2.dP() # for differential
+            if draw_last_iteration and (i + 1) == iterations and draw_differentials:
+                ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'r--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
+
+            nextRay = ray2.sampleNext(hit2)
+            if nextRay is not None:
+                ray2 = nextRay
         
         # check final position
         curP = ray2.P()
