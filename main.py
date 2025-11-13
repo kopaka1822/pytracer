@@ -132,11 +132,7 @@ def methodRayDiff(C0, dir, hits):
         curP = ray2.P() + ray2.dP()
         # draw ray differential segment
         if draw_differentials and iterations == 0:
-            ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'c--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
-
-        if draw_differentials and iterations == 0:
-            # debug D + dD
-            ax.arrow(ray2.P()[0] + ray2.dP()[0], ray2.P()[1] + ray2.dP()[1], ray2.D()[0] + ray2.dD()[0], ray2.D()[1] + ray2.dD()[1], head_width=0.2, color='orange', length_includes_head=True)
+            ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'b--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
 
         # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
         P = hit.P()
