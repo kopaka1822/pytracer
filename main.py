@@ -183,13 +183,14 @@ def doRealIterations(C0, dir, newDir, hits):
         N = hits[-2].P() - hits[-1].P()
     
     PPlane = Plane(P, P + [-N[1], N[0]])  # create plane orthogonal to dir at P
+    # geometric normal of the last plane
+    lastPlaneN = hits[-1].Plane().N() * (-1 if np.dot(hits[-1].Plane().N(), N) < 0 else 1)
 
     bestDiff = float('inf')
     bestDir = newDir.copy()
     nextS = 0.0
     fails = 0 # number of iterations without improvement
 
-    LastPlaneN = hits[-1].Plane().N() * (-1 if np.dot(hits[-1].Plane().N(), N) < 0 else 1)
     onlyPositiveMultiplier = True # check if only positive multipliers have been used
     print("-----------------------------------------------------------------------------")
     # refine newDir over multiple iterations
@@ -204,13 +205,15 @@ def doRealIterations(C0, dir, newDir, hits):
                 sign = (-1) ** (fails+1)
                 exponent = -((fails + 1) // 2)
                 stepMultiplier = sign * pow(2.0, exponent)
-            print(f"It: {i} no improvement, trying stepMultiplier={stepMultiplier}")
+            print(f"It: {i} no improvement (diff={lastBestDiff:.4g}, steps={lastNumSteps}), trying stepMultiplier={stepMultiplier}")
 
         ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
         initial_dir = ray2.D().copy() # initial direction for this iteration
         prevPlane = None
         foundBetter = False
         drawIteration = (i + 1) == iterations and draw_last_iteration
+        lastBestDiff = float('inf')
+        lastNumSteps = 0
 
         # trace similar number of bounces as original ray
         for iHit in range(len(hits) + 2):
@@ -219,18 +222,24 @@ def doRealIterations(C0, dir, newDir, hits):
 
             # last hit or T>0 and front face hit
             #testPPlane = (hit is None) or (phit.T() > 0)
-            testPPlane = (hit is None) or (phit.T() > 0 and np.dot(N, ray2.D()) < 0)
+            #testPPlane = (hit is None) or (phit.T() > 0 and np.dot(N, ray2.D()) < 0)
+            testPPlane = (phit.T() > 0) and (np.dot(N, ray2.D()) < 0)
             #testPPlane = (hit is None) or (phit.T() > 0 and np.dot(LastPlaneN, ray2.D()) < 0)
 
             if testPPlane:
                 PStar = phit.P()
                 diff = np.linalg.norm(P - PStar)**2
                 if hit is not None:
-                    diff += np.linalg.norm(PStar - hit.P())**2
+                    #diff += 10.0 * np.linalg.norm(PStar - hit.P())**2
+                    diff += max(0.0, np.dot(lastPlaneN, hit.P() - P))**2 # penalize if in front of geometric plane (but not on or behind)
                 throughputPenalty = True
                 if throughputPenalty:
-                    diff *= (1 + abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
+                    diff *= (1 + 0.1 * abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
                     #diff += abs(len(hits) - (iHit + 1)) # larger errors if throughput / path length differs
+
+                if diff < lastBestDiff: # for logging
+                    lastBestDiff = diff
+                    lastNumSteps = iHit + 1
 
                 if diff < bestDiff:
                     bestDiff = diff
@@ -251,10 +260,12 @@ def doRealIterations(C0, dir, newDir, hits):
 
         if not foundBetter:
             fails += 1
+            if (i + 1) == iterations:
+                print(f"It: {i+1} no improvement with diff={lastBestDiff:.4g}, steps={lastNumSteps}.")
         else:
             if onlyPositiveMultiplier and stepMultiplier < 0:
                 onlyPositiveMultiplier = False
-            print(f"It: {i+1} found better solution with diff={bestDiff:.4g}, nextS={nextS:.4g} using stepMultiplier={stepMultiplier}.")
+            print(f"It: {i+1} found better solution with diff={bestDiff:.4g}, steps={lastNumSteps}, nextS={nextS:.4g} using stepMultiplier={stepMultiplier}.")
             fails = 0
 
         if drawIteration:
@@ -327,6 +338,7 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
         return
     ray2 = Ray(C0, dir)
     P = hits[-1].P()
+    N = hits[-1].Plane().N()
     newHits = []
     prevPlane = None
     bestDiff = float('inf')
@@ -342,7 +354,8 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
         ray2 = ray2.transfer(hit)
 
         curP = ray2.P()
-        diff = np.linalg.norm(P - curP)
+        diff = np.linalg.norm(P - curP)**2
+        diff += np.dot(N, curP - P)**2 # penalize if different from geometric plane (which we usually test against here)
 
         if diff < bestDiff:
             bestDiff = diff
