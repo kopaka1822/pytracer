@@ -18,8 +18,9 @@ def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
 # Camera positions (modifiable via sliders)
 C0 = np.array([-10, 2.15])
 C1 = np.array([-8.55, 4.5])
-C1_angle = -46.8  # in degrees
-max_bounces = 3
+#C1_angle = -46.8  # in degrees
+C1_angle = 0.0
+max_bounces = 1
 draw_differentials = True
 draw_guess = True
 draw_normals = False
@@ -379,7 +380,7 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     
     # perform a transfer from the hit[0] to the virtual plane at C0
     virtualT = np.dot(C0 - hits[0].P(), -dir)
-    virtualC1 = hits[0].P() + dir * virtualT # position of C1 on the virtual plane defined by C0 with normal dir
+    virtualC1 = hits[0].P() - dir * virtualT # position of C1 on the virtual plane defined by C0 with normal dir
     Jpp, Jpd = transferRRDiff(Jpp, Jpd, -dir, dir, virtualT)
 
     R = -dir # outgoing ray direction
@@ -407,7 +408,10 @@ def methodReverseRayDiff(C0, C1, dir, hits):
         R = D # update outgoing direction for next iteration
 
     # final step: solve dD0 = Jpd^-1 * (C0 - virtualC1)
-    dD0 = mul(np.linalg.inv(Jpd), C0 - virtualC1)
+    invJpd = np.linalg.inv(Jpd)
+    dPn = C0 - virtualC1
+    print(f"Solving Reverse Ray Diff: Jpd=\n{Jpd}, invJpd=\n{invJpd}, dPn={dPn}")
+    dD0 = mul(invJpd, dPn)
     newDir = R + dD0 # R is the initial direction of the ray starting from P (hits[-1])
     print(f"Final Reverse Ray Diff: dD0={dD0}, newDir={newDir}")
 
