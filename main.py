@@ -26,7 +26,7 @@ draw_normals = False
 iterations = 1
 iteration_strategies = ["Virtual iterations", "Real iterations"]
 iteration_strategy = 1  # index into iteration_strategies
-predict_strategies = ["ray diff", "ray length", "reflect and shear"]
+predict_strategies = ["ray diff", "reverse ray diff", "ray length", "reflect and shear"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
 useShear = True
@@ -105,8 +105,10 @@ def draw_scene():
     if predict_strategy == 0:
         newDir = methodRayDiff(C0, dir, hits)
     if predict_strategy == 1:
-        newDir = methodRayLength(C0, C1, dir, hits)
+        newDir = methodReverseRayDiff(C0, C1, dir, hits)
     if predict_strategy == 2:
+        newDir = methodRayLength(C0, C1, dir, hits)
+    if predict_strategy == 3:
         newDir = methodReflectAndShear(C0, dir, hits)
     
     #if iteration_strategy == 1:
@@ -117,6 +119,10 @@ def draw_scene():
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
+
+# ---------------------------------------------------------------
+# Ray Differential Method
+# ---------------------------------------------------------------
 
 def methodRayDiff(C0, dir, hits):
     ray2 = Ray(C0, dir)
@@ -325,6 +331,91 @@ def doVirtualIterations(C0, newDir, hits):
     
     return bestDir
 
+# ---------------------------------------------------------------
+# Reverse Ray Differential Method
+# ---------------------------------------------------------------
+
+def transferRRDiff(Jpp, Jpd, D, N, t):
+    I = np.identity(2)
+    DNTDN = np.outer(D, N) / np.dot(D, N)
+    Lpp = I - DNTDN
+    Lpd = t * I - t * DNTDN
+    Jpp_new = mul(Jpp, Lpp)
+    Jpd_new = mul(Jpp, Lpd) + Jpd
+    print(f"TransferRRDiff: t={t:.4g}, Lpp=\n{Lpp}, Lpd=\n{Lpd}")
+    return Jpp_new, Jpd_new
+
+def reflectRRDiff(Jpp, Jpd, D, N, M):
+    I = np.identity(2)
+    Ldd = I - 2 * np.outer(N, N)
+    Ldp = -2 * (np.dot(D, N) * M + mul(np.outer(N, D), M))
+    Jpp_new = Jpp + mul(Jpd, Ldp)
+    Jpd_new = mul(Jpd, Ldd)
+    print(f"ReflectRRDiff: Ldd=\n{Ldd}, Ldp=\n{Ldp}")
+    return Jpp_new, Jpd_new
+
+def refractRRDiff(Jpp, Jpd, D, R, N, eta, M):
+    I = np.identity(2)
+    # TODO is dot(N, D) < 0 a requirement?
+    if np.dot(N, D) > 0:
+        N = -N
+    mu = eta * np.dot(D, N) - np.dot(R, N)
+    k = eta - eta * eta * np.dot(D, N) / np.dot(R, N)
+    Ldd = eta * I - k * np.outer(N, N)
+    Ldp = -mu * M - k * mul(np.outer(N, D), M)
+    Jpp_new = Jpp + mul(Jpd, Ldp)
+    Jpd_new = mul(Jpd, Ldd)
+    print(f"RefractRRDiff: mu={mu:.4g}, k={k:.4g}, Ldd=\n{Ldd}, Ldp=\n{Ldp}")
+    return Jpp_new, Jpd_new
+
+
+
+def methodReverseRayDiff(C0, C1, dir, hits):
+    if len(hits) == 0:
+        return dir
+    
+    Jpp = np.identity(2)
+    Jpd = np.zeros((2, 2))
+    
+    # perform a transfer from the hit[0] to the virtual plane at C0
+    virtualT = np.dot(C0 - hits[0].P(), -dir)
+    virtualC1 = hits[0].P() + dir * virtualT # position of C1 on the virtual plane defined by C0 with normal dir
+    Jpp, Jpd = transferRRDiff(Jpp, Jpd, -dir, dir, virtualT)
+
+    R = -dir # outgoing ray direction
+    for i in range(1, len(hits)):
+        # handle surface interactin at j
+        j = i - 1
+        D = hits[j].P() - hits[i].P() # incomming ray direction
+        t = np.linalg.norm(D)
+        D = D / t # normalize
+        N = hits[j].Plane().N()
+        M = np.zeros((2, 2)) # TODO shape matrix
+        
+        if hits[j].Plane().Ior() == 1.0:
+            # reflection
+            Jpp, Jpd = reflectRRDiff(Jpp, Jpd, D, N, M)
+        else:
+            # refraction
+            eta = hits[j].Plane().Ior()
+            if np.dot(N, D) < 0:
+                eta = 1.0 / eta
+            Jpp, Jpd = refractRRDiff(Jpp, Jpd, D, R, N, eta, M)
+
+        # transfer from i to j
+        Jpp, Jpd = transferRRDiff(Jpp, Jpd, D, N, t)
+        R = D # update outgoing direction for next iteration
+
+    # final step: solve dD0 = Jpd^-1 * (C0 - virtualC1)
+    dD0 = mul(np.linalg.inv(Jpd), C0 - virtualC1)
+    newDir = R + dD0 # R is the initial direction of the ray starting from P (hits[-1])
+    print(f"Final Reverse Ray Diff: dD0={dD0}, newDir={newDir}")
+
+    # TODO do iterations with newDir?
+    newDir /= np.linalg.norm(newDir)
+    return newDir
+
+
 def draw_direction(C0, dir):
     ax.arrow(C0[0], C0[1], dir[0] * 1.5, dir[1] * 1.5, head_width=0.2, color='orange', length_includes_head=True, label=LABEL_RAY2_PRED)
 
@@ -440,6 +531,7 @@ def methodRayLength(C0, C1, dir, hits):
         ax.text(end_point[0]+0.2, end_point[1]+0.2, "P*", color='b')
 
     newDir = C1 + dir * rayLength - C0
+    newDir /= np.linalg.norm(newDir)
     return newDir
 
 # matrix multiplication
