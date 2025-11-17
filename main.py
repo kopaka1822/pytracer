@@ -336,26 +336,30 @@ def doVirtualIterations(C0, newDir, hits):
 # Reverse Ray Differential Method
 # ---------------------------------------------------------------
 
-def transferRRDiff(Jpp, Jpd, D, N, t):
+def transferRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, t):
     I = np.identity(2)
     DNTDN = np.outer(D, N) / np.dot(D, N)
     Lpp = I - DNTDN
     Lpd = t * I - t * DNTDN
     Jpp_new = mul(Jpp, Lpp)
     Jpd_new = mul(Jpp, Lpd) + Jpd
+    Jdp_new = mul(Jdp, Lpp)
+    Jdd_new = mul(Jdp, Lpd) + Jdd
     print(f"TransferRRDiff: t={t:.4g}, Lpp=\n{Lpp}, Lpd=\n{Lpd}")
-    return Jpp_new, Jpd_new
+    return Jpp_new, Jpd_new, Jdp_new, Jdd_new
 
-def reflectRRDiff(Jpp, Jpd, D, N, M):
+def reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, M):
     I = np.identity(2)
     Ldd = I - 2 * np.outer(N, N)
     Ldp = -2 * (np.dot(D, N) * M + mul(np.outer(N, D), M))
     Jpp_new = Jpp + mul(Jpd, Ldp)
     Jpd_new = mul(Jpd, Ldd)
+    Jdp_new = Jdp + mul(Jdd, Ldp)
+    Jdd_new = mul(Jdd, Ldd)
     print(f"ReflectRRDiff: Ldd=\n{Ldd}, Ldp=\n{Ldp}")
-    return Jpp_new, Jpd_new
+    return Jpp_new, Jpd_new, Jdp_new, Jdd_new
 
-def refractRRDiff(Jpp, Jpd, D, R, N, eta, M):
+def refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, N, eta, M):
     I = np.identity(2)
     # TODO is dot(N, D) < 0 a requirement?
     if np.dot(N, D) > 0:
@@ -366,10 +370,31 @@ def refractRRDiff(Jpp, Jpd, D, R, N, eta, M):
     Ldp = -mu * M - k * mul(np.outer(N, D), M)
     Jpp_new = Jpp + mul(Jpd, Ldp)
     Jpd_new = mul(Jpd, Ldd)
+    Jdp_new = Jdp + mul(Jdd, Ldp)
+    Jdd_new = mul(Jdd, Ldd)
     print(f"RefractRRDiff: mu={mu:.4g}, k={k:.4g}, Ldd=\n{Ldd}, Ldp=\n{Ldp}")
-    return Jpp_new, Jpd_new
+    return Jpp_new, Jpd_new, Jdp_new, Jdd_new
 
+def solveForDD0(Jdp, dPn, D0):
+    A = Jdp.copy()
+    b = dPn.copy()
+    firstRowSq = A[0,0] * A[0, 0] + A[0,1] * A[0,1]
+    secondRowSq = A[1,0] * A[1,0] + A[1,1] * A[1,1]
+    print(f"SolveForDD0: Jdp=\n{Jdp}, dPn={dPn}, firstRowSq={firstRowSq:.4g}, secondRowSq={secondRowSq:.4g}")
+    if firstRowSq > secondRowSq: # replace second row
+        A[1,0] = D0[0]
+        A[1,1] = D0[1]
+        b[1] = 0.0
+    else: # replace first row
+        A[0,0] = D0[0]
+        A[0,1] = D0[1]
+        b[0] = 0.0
 
+    #dD0 = np.linalg.solve(A, b)
+    invA = np.linalg.inv(A)
+    print(f"SolveForDD0: Modified A=\n{A}, b={b}, invA=\n{invA}")
+    dD0 = mul(invA, b)
+    return dD0
 
 def methodReverseRayDiff(C0, C1, dir, hits):
     if len(hits) == 0:
@@ -377,11 +402,13 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     
     Jpp = np.identity(2)
     Jpd = np.zeros((2, 2))
+    Jdp = np.zeros((2, 2))
+    Jdd = np.identity(2)
     
     # perform a transfer from the hit[0] to the virtual plane at C0
     virtualT = np.dot(C0 - hits[0].P(), -dir)
     virtualC1 = hits[0].P() - dir * virtualT # position of C1 on the virtual plane defined by C0 with normal dir
-    Jpp, Jpd = transferRRDiff(Jpp, Jpd, -dir, dir, virtualT)
+    Jpp, Jpd, Jdp, Jdd = transferRRDiff(Jpp, Jpd, Jdp, Jdd, -dir, dir, virtualT)
 
     R = -dir # outgoing ray direction
     for i in range(1, len(hits)):
@@ -395,25 +422,25 @@ def methodReverseRayDiff(C0, C1, dir, hits):
         
         if hits[j].Plane().Ior() == 1.0:
             # reflection
-            Jpp, Jpd = reflectRRDiff(Jpp, Jpd, D, N, M)
+            Jpp, Jpd, Jdp, Jdd = reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, M)
         else:
             # refraction
             eta = hits[j].Plane().Ior()
             if np.dot(N, D) < 0:
                 eta = 1.0 / eta
-            Jpp, Jpd = refractRRDiff(Jpp, Jpd, D, R, N, eta, M)
+            Jpp, Jpd, Jdp, Jdd = refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, N, eta, M)
 
         # transfer from i to j
-        Jpp, Jpd = transferRRDiff(Jpp, Jpd, D, N, t)
+        Jpp, Jpd, Jdp, Jdd = transferRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, t)
         R = D # update outgoing direction for next iteration
 
     # final step: solve dD0 = Jpd^-1 * (C0 - virtualC1)
-    invJpd = np.linalg.inv(Jpd)
     dPn = C0 - virtualC1
-    print(f"Solving Reverse Ray Diff: Jpd=\n{Jpd}, invJpd=\n{invJpd}, dPn={dPn}")
-    dD0 = mul(invJpd, dPn)
-    newDir = R + dD0 # R is the initial direction of the ray starting from P (hits[-1])
-    print(f"Final Reverse Ray Diff: dD0={dD0}, newDir={newDir}")
+    dD0 = solveForDD0(Jpd, dPn, R)
+    dDn = mul(Jdd, dD0)
+    #newDir = R + dD0 # R is the initial direction of the ray starting from P (hits[-1])
+    newDir = dir - dD0 # negate because we traced backwards
+    print(f"Final Reverse Ray Diff: dD0={dD0}, dDn={dDn}, newDir={newDir}")
 
     # TODO do iterations with newDir?
     newDir /= np.linalg.norm(newDir)
