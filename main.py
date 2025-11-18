@@ -430,6 +430,8 @@ def methodReverseRayDiff(C0, C1, dir, hits):
             eta = hits[j].Plane().Ior()
             if np.dot(N, D) < 0:
                 eta = 1.0 / eta
+            else:
+                M = -M # invert shape matrix if normal is flipped (this will flip the normal calculated by the shape matrix)
             Jpp, Jpd, Jdp, Jdd = refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, N, eta, M)
 
         # transfer from i to j
@@ -441,7 +443,7 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     dD0 = solveForDD0(Jpd, dPn, R)
     dDn = mul(Jdd, dD0)
     #newDir = R + dD0 # R is the initial direction of the ray starting from P (hits[-1])
-    newDir = dir - dD0 # negate because we traced backwards
+    newDir = dir - dDn # negate because we traced backwards
     print(f"Final Reverse Ray Diff: dD0={dD0}, dDn={dDn}, newDir={newDir}")
 
     if draw_guess:
