@@ -418,7 +418,9 @@ def methodReverseRayDiff(C0, C1, dir, hits):
         t = np.linalg.norm(D)
         D = D / t # normalize
         N = hits[j].Plane().N()
-        M = np.zeros((2, 2)) # TODO shape matrix
+        M = np.zeros((2, 2))
+        if Ray.use_normal_differential:
+            M = hits[j].Plane().ShapeMatrix(hits[j].P())
         
         if hits[j].Plane().Ior() == 1.0:
             # reflection
@@ -441,6 +443,34 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     #newDir = R + dD0 # R is the initial direction of the ray starting from P (hits[-1])
     newDir = dir - dD0 # negate because we traced backwards
     print(f"Final Reverse Ray Diff: dD0={dD0}, dDn={dDn}, newDir={newDir}")
+
+    if draw_guess:
+        # draw the ray differential from P that goes to C0 with initial differential dD0
+        rray = Ray(hits[-1].P(), R) # reverse ray
+        rray = rray.setdD(dD0)
+        
+        # create reverse hits
+        rhits = []
+        for i in range(len(hits) - 2, -1, -1):
+            rhit = Hit(hits[i].Plane(), hits[i].P(), hits[i+1].T())
+            rhits.append(rhit)
+        rhits.append(Hit(Plane(virtualC1, virtualC1 + [-dir[1], dir[0]]), virtualC1, virtualT)) # virtual plane at C0
+
+        # iterate through hits in reverse and skip the last hit (we start after P)
+        for rhit in rhits:
+            curP = rhit.P()
+            ax.plot([rray.P()[0], curP[0]], [rray.P()[1], curP[1]], 'b-', label=LABEL_RAY2 if rhit == rhits[0] else None)
+            # transfer ray
+            prevdP = rray.P() + rray.dP()
+            rray = rray.transfer(rhit)
+            curdP = rray.P() + rray.dP()
+            if draw_differentials and iterations == 0:
+                ax.plot([prevdP[0], curdP[0]], [prevdP[1], curdP[1]], 'b--', label=LABEL_RAY2_DIFF if rhit == rhits[0] else None)
+
+            nextRay = rray.sampleNext(rhit) # should be simply invertable in our case
+            assert nextRay is not None
+            rray = nextRay
+
 
     # TODO do iterations with newDir?
     newDir /= np.linalg.norm(newDir)

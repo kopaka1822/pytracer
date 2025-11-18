@@ -39,6 +39,9 @@ class Ray:
     def shiftS(self, s: float) -> "Ray":
         newD = self._D + s * self._Right
         return Ray(self._P, newD, self._dP, self._dD)
+    
+    def setdD(self, newdD: np.ndarray) -> "Ray":
+        return Ray(self._P, self._D, self._dP, newdD)
 
     def calcHit(self, plane: Plane, forceIntersect: bool = False) -> Hit | None:
         N = plane.N()

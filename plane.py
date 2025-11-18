@@ -70,6 +70,14 @@ class Plane:
         n = self.UnnormalizedShadingN(P)
 
         return (dn * np.dot(n, n) - n * np.dot(n, dn)) / (np.dot(n, n) ** 1.5)
+    
+    def ShapeMatrix(self, P: np.ndarray) -> np.ndarray:
+        n = self.UnnormalizedShadingN(P)
+        f = 1.0 / pow(np.dot(n, n), 1.5) # normalization factor
+        dir_vec = self._P2 - self._P1
+        const = np.outer(self._normal2 - self._normal1, dir_vec) / np.dot(dir_vec, dir_vec)
+        
+        return f * (np.dot(n, n) * np.identity(2) - np.outer(n, n)) @ const
 
     def Ior(self) -> float:
         return self._ior
