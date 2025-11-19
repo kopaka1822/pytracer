@@ -16,7 +16,7 @@ def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
 
 
 # Camera positions (modifiable via sliders)
-C0 = np.array([-10, 2.15])
+C0 = np.array([-9.9, 2.15])
 C1 = np.array([-8.55, 4.5])
 #C1_angle = -46.8  # in degrees
 C1_angle = 0.0
@@ -30,7 +30,7 @@ iteration_strategy = 1  # index into iteration_strategies
 predict_strategies = ["ray diff", "reverse ray diff", "ray length", "reflect and shear"]
 predict_strategy = 0  # index into predict_strategies
 useSpeed = False
-useShear = True
+useShear = False
 draw_last_iteration = True
 EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
 
@@ -381,7 +381,7 @@ def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
 
         ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
         initial_dir = ray2.D().copy() # initial direction for this iteration
-        prevPlane = None
+        prevPlane = hits[-1].Plane() # its very important to ignore the plane we are starting on
         foundBetter = False
         lastBestDiff = float('inf')
         lastNumSteps = 0
@@ -437,7 +437,7 @@ def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
 
         if draw_last_iteration and (i + 1) == iterations:
             rhits = reverseHits(C0, dir, hits)
-            trace_and_draw_actual(P, initial_dir, rhits, color='red', label=LABEL_RAY2_ITERATION)
+            trace_and_draw_actual(P, initial_dir, rhits, color='red', label=LABEL_RAY2_ITERATION, prevPlane=hits[-1].Plane())
 
     if not onlyPositiveMultiplier:
         print("WARNING: negative step multipliers were used during real iterations.")
@@ -633,7 +633,7 @@ def draw_prediction(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
                     ax.plot(hit2.P()[0], hit2.P()[1], 'rx', markersize=12)
                 break # refraction not possible
 
-def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
+def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED, prevPlane=None):
     if(len(hits) == 0):
         draw_direction(C0, dir)
         return
@@ -648,7 +648,6 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
         N = -N
 
     newHits = []
-    prevPlane = None
     bestDiff = float('inf')
     index = 0
 
@@ -779,8 +778,13 @@ def methodReflectAndShear(C0, dir, hits):
         newDir = doVirtualIterations(C0, newDir, hits)
     if iteration_strategy == 1:
         newDir = doRealIterations(C0, dir, newDir, hits)
-    #if iteration_strategy == 2:
-    #    newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=-(ray2.D() + lastS * ray2.dD()))
+    if iteration_strategy == 2:
+        Cmirrored = mul(np.linalg.inv(viewTransform), np.array([C0[0], C0[1], 1.0]))[:2]
+        # debug plot Cmirrored
+        ax.plot(Cmirrored[0], Cmirrored[1], 'gx', markersize=12)
+        ax.text(Cmirrored[0]+0.2, Cmirrored[1]+0.2, "C0*", color='g')
+        lastDir = (Cmirrored - P) / np.linalg.norm(Cmirrored - P)
+        newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=lastDir)
 
     return newDir
 
