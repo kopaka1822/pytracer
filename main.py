@@ -779,11 +779,7 @@ def methodReflectAndShear(C0, dir, hits):
     if iteration_strategy == 1:
         newDir = doRealIterations(C0, dir, newDir, hits)
     if iteration_strategy == 2:
-        Cmirrored = mul(np.linalg.inv(viewTransform), np.array([C0[0], C0[1], 1.0]))[:2]
-        # debug plot Cmirrored
-        ax.plot(Cmirrored[0], Cmirrored[1], 'gx', markersize=12)
-        ax.text(Cmirrored[0]+0.2, Cmirrored[1]+0.2, "C0*", color='g')
-        lastDir = (Cmirrored - P) / np.linalg.norm(Cmirrored - P)
+        lastDir = -mul(np.linalg.inv(viewTransform[:2,:2]), newDir)
         newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=lastDir)
 
     return newDir
