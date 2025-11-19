@@ -32,7 +32,7 @@ predict_strategy = 0  # index into predict_strategies
 useSpeed = False
 useShear = True
 draw_last_iteration = True
-EXTRA_BOUNCES = 2 # allowed number of extra bounces during real iterations
+EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
 
 # labels
 LABEL_RAY = "original"
@@ -448,17 +448,17 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     newDir = dir - dDn # negate because we traced backwards
     print(f"Final Reverse Ray Diff: dD0={dD0}, dDn={dDn}, newDir={newDir}")
 
+    # create reverse hits (for drawing and iterations)
+    rhits = []
+    for i in range(len(hits) - 2, -1, -1):
+        rhit = Hit(hits[i].Plane(), hits[i].P(), hits[i+1].T())
+        rhits.append(rhit)
+    rhits.append(Hit(Plane(virtualC1, virtualC1 + [-dir[1], dir[0]]), virtualC1, virtualT)) # virtual plane at C0
+
     if draw_guess:
         # draw the ray differential from P that goes to C0 with initial differential dD0
         rray = Ray(hits[-1].P(), R) # reverse ray
         rray = rray.setdD(dD0)
-        
-        # create reverse hits
-        rhits = []
-        for i in range(len(hits) - 2, -1, -1):
-            rhit = Hit(hits[i].Plane(), hits[i].P(), hits[i+1].T())
-            rhits.append(rhit)
-        rhits.append(Hit(Plane(virtualC1, virtualC1 + [-dir[1], dir[0]]), virtualC1, virtualT)) # virtual plane at C0
 
         # iterate through hits in reverse and skip the last hit (we start after P)
         for rhit in rhits:
@@ -474,8 +474,11 @@ def methodReverseRayDiff(C0, C1, dir, hits):
 
             rray = rray.sampleNext(rhit) # should be simply invertable in our case
 
-
-    # TODO do iterations with newDir?
+    if iteration_strategy == 0:
+        newDir = doVirtualIterations(C0, newDir, hits)
+    if iteration_strategy == 1:
+        newDir = doRealIterations(C0, dir, newDir, hits)
+    
     newDir /= np.linalg.norm(newDir)
     return newDir
 
@@ -515,6 +518,13 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
     ray2 = Ray(C0, dir)
     P = hits[-1].P()
     N = hits[-1].Plane().N()
+    # face forward N
+    if len(hits) >= 2:
+        if np.dot(hits[-2].P() - hits[-1].P(), N) > 0:
+            N = -N
+    elif np.dot(dir, N) > 0:
+        N = -N
+
     newHits = []
     prevPlane = None
     bestDiff = float('inf')
@@ -528,10 +538,10 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
         prevPlane = hit.Plane()
         newHits.append(hit)
         ray2 = ray2.transfer(hit)
-
+        
         curP = ray2.P()
         diff = np.linalg.norm(P - curP)**2
-        diff += np.dot(N, curP - P)**2 # penalize if different from geometric plane (which we usually test against here)
+        diff += max(0.0, np.dot(N, curP - P))**2 # penalize if in front of geometric plane (but not on or behind)
 
         if diff < bestDiff:
             bestDiff = diff
