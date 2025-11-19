@@ -336,7 +336,7 @@ def doVirtualIterations(C0, newDir, hits):
 # Reverse Ray Differential Method
 # ---------------------------------------------------------------
 
-def transferRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, t):
+def transferRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, t): # N = geometric normal
     I = np.identity(2)
     DNTDN = np.outer(D, N) / np.dot(D, N)
     Lpp = I - DNTDN
@@ -348,7 +348,7 @@ def transferRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, t):
     print(f"TransferRRDiff: t={t:.4g}, Lpp=\n{Lpp}, Lpd=\n{Lpd}")
     return Jpp_new, Jpd_new, Jdp_new, Jdd_new
 
-def reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, M):
+def reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, M): # N = shading normal
     I = np.identity(2)
     Ldd = I - 2 * np.outer(N, N)
     Ldp = -2 * (np.dot(D, N) * M + mul(np.outer(N, D), M))
@@ -359,11 +359,8 @@ def reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, M):
     print(f"ReflectRRDiff: Ldd=\n{Ldd}, Ldp=\n{Ldp}")
     return Jpp_new, Jpd_new, Jdp_new, Jdd_new
 
-def refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, N, eta, M):
+def refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, N, eta, M): # N = shading normal
     I = np.identity(2)
-    # TODO is dot(N, D) < 0 a requirement?
-    if np.dot(N, D) > 0:
-        N = -N
     mu = eta * np.dot(D, N) - np.dot(R, N)
     k = eta - eta * eta * np.dot(D, N) / np.dot(R, N)
     Ldd = eta * I - k * np.outer(N, N)
@@ -380,7 +377,8 @@ def solveForDD0(Jdp, dPn, D0):
     b = dPn.copy()
     firstRowSq = A[0,0] * A[0, 0] + A[0,1] * A[0,1]
     secondRowSq = A[1,0] * A[1,0] + A[1,1] * A[1,1]
-    print(f"SolveForDD0: Jdp=\n{Jdp}, dPn={dPn}, firstRowSq={firstRowSq:.4g}, secondRowSq={secondRowSq:.4g}")
+    det = A[0,0] * A[1,1] - A[0,1] * A[1,0]
+    print(f"SolveForDD0: Jdp=\n{Jdp} (det={det:.4g}), dPn={dPn}, firstRowSq={firstRowSq:.4g}, secondRowSq={secondRowSq:.4g}")
     if firstRowSq > secondRowSq: # replace second row
         A[1,0] = D0[0]
         A[1,1] = D0[1]
@@ -392,7 +390,8 @@ def solveForDD0(Jdp, dPn, D0):
 
     #dD0 = np.linalg.solve(A, b)
     invA = np.linalg.inv(A)
-    print(f"SolveForDD0: Modified A=\n{A}, b={b}, invA=\n{invA}")
+    det = A[0,0] * A[1,1] - A[0,1] * A[1,0]
+    print(f"SolveForDD0: Modified A=\n{A} (det={det:.4g}), b={b}, invA=\n{invA}")
     dD0 = mul(invA, b)
     return dD0
 
@@ -418,13 +417,15 @@ def methodReverseRayDiff(C0, C1, dir, hits):
         t = np.linalg.norm(D)
         D = D / t # normalize
         N = hits[j].Plane().N()
+        ShadingN = N
         M = np.zeros((2, 2))
         if Ray.use_normal_differential:
             M = hits[j].Plane().ShapeMatrix(hits[j].P())
+            ShadingN = hits[j].ShadingN()
         
         if hits[j].Plane().Ior() == 1.0:
             # reflection
-            Jpp, Jpd, Jdp, Jdd = reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, M)
+            Jpp, Jpd, Jdp, Jdd = reflectRRDiff(Jpp, Jpd, Jdp, Jdd, D, ShadingN, M)
         else:
             # refraction
             eta = hits[j].Plane().Ior()
@@ -432,7 +433,8 @@ def methodReverseRayDiff(C0, C1, dir, hits):
                 eta = 1.0 / eta
             else:
                 M = -M # invert shape matrix if normal is flipped (this will flip the normal calculated by the shape matrix)
-            Jpp, Jpd, Jdp, Jdd = refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, N, eta, M)
+                ShadingN = -ShadingN
+            Jpp, Jpd, Jdp, Jdd = refractRRDiff(Jpp, Jpd, Jdp, Jdd, D, R, ShadingN, eta, M)
 
         # transfer from i to j
         Jpp, Jpd, Jdp, Jdd = transferRRDiff(Jpp, Jpd, Jdp, Jdd, D, N, t)
@@ -465,13 +467,12 @@ def methodReverseRayDiff(C0, C1, dir, hits):
             # transfer ray
             prevdP = rray.P() + rray.dP()
             rray = rray.transfer(rhit)
+            assert np.linalg.norm(rray.P() - rhit.P()) < 1e-5 # should be the same
             curdP = rray.P() + rray.dP()
             if draw_differentials and iterations == 0:
                 ax.plot([prevdP[0], curdP[0]], [prevdP[1], curdP[1]], 'b--', label=LABEL_RAY2_DIFF if rhit == rhits[0] else None)
 
-            nextRay = rray.sampleNext(rhit) # should be simply invertable in our case
-            assert nextRay is not None
-            rray = nextRay
+            rray = rray.sampleNext(rhit) # should be simply invertable in our case
 
 
     # TODO do iterations with newDir?
