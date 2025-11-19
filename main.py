@@ -151,7 +151,7 @@ def methodRayDiff(C0, dir, hits):
         lastS = s
 
         nextRay = ray2.sampleNext(hit2)
-        if nextRay is not None:
+        if nextRay is not None and hit != hits[-1]: # update ray2 except for last hit
             ray2 = nextRay
 
     # draw P* and differentials
@@ -179,7 +179,7 @@ def methodRayDiff(C0, dir, hits):
     if iteration_strategy == 1:
         newDir = doRealIterations(C0, dir, newDir, hits)
     if iteration_strategy == 2:
-        newDir = doReverseRealIterations(C0, dir, hits)
+        newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=-(ray2.D() + lastS * ray2.dD()))
 
     newDir /= np.linalg.norm(newDir)
     return newDir
@@ -331,13 +331,16 @@ def doVirtualIterations(C0, newDir, hits):
     
     return bestDir
 
-def doReverseRealIterations(C0, dir, hits):
+def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
+    print("-----------------------------------------------------------------------------")
+    if iterations <= 0: return newDir # do nothing
     if len(hits) == 0:
         return None
     P = hits[-1].P()
     d0Start = -dir
     if len(hits) >= 2:
         d0Start = hits[-2].P() - hits[-1].P()
+    d0Start /= np.linalg.norm(d0Start) # normalize for computations below
 
     # camera plane at C0
     CPlane = Plane(C0, C0 + [dir[1], -dir[0]])  # create plane orthogonal to dir at C0
@@ -347,13 +350,20 @@ def doReverseRealIterations(C0, dir, hits):
     bestDir0 = d0Start # direction from P to C0
     bestDirN = dir # direction from C0 to P
     nextS = 0 # actually, just repeat the d0Start ray to determine the error
+    if initialDir0 is not None:
+        # solve (d0Start - t * intialDirN) * d0Start = 0 => t = (d0Start * d0Start) / (intialDirN * d0Start)
+        initialDir0 /= np.linalg.norm(initialDir0)
+        t = np.dot(d0Start, d0Start) / np.dot(initialDir0, d0Start)
+        ddWanted = t * initialDir0 - d0Start
+        nextS = solveLinearEq(Ray(P, bestDir0).dD(), ddWanted)
+        print(f"Using initialDir0 to determine starting nextS = {nextS:.4g}, d0Start = {d0Start}, initialDir0 = {initialDir0}, ddWanted = {ddWanted}")
     fails = 0 # number of iterations without improvement
 
     onlyPositiveMultiplier = True # check if only positive multipliers have been used
     stepMultiplier = 1.0
-    print("-----------------------------------------------------------------------------")
+    
     # refine newDir over multiple iterations
-    for i in range(-1, iterations): # do one extra iteration for the step that we could already determine via reverse
+    for i in range(iterations): # do one extra iteration for the step that we could already determine via reverse
         ray2 = Ray(P, bestDir0)
         if fails > 0:
             if Ray.use_normal_differential:
@@ -589,7 +599,7 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     if iteration_strategy == 1:
         newDir = doRealIterations(C0, dir, newDir, hits)
     if iteration_strategy == 2:
-        newDir = doReverseRealIterations(C0, dir, hits)
+        newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=R + dD0)
     
     newDir /= np.linalg.norm(newDir)
     return newDir
