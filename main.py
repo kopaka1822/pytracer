@@ -25,7 +25,7 @@ draw_differentials = True
 draw_guess = True
 draw_normals = False
 iterations = 1
-iteration_strategies = ["Virtual iterations", "Real iterations"]
+iteration_strategies = ["Virtual iterations", "Real iterations", "Reverse real it."]
 iteration_strategy = 1  # index into iteration_strategies
 predict_strategies = ["ray diff", "reverse ray diff", "ray length", "reflect and shear"]
 predict_strategy = 0  # index into predict_strategies
@@ -178,7 +178,9 @@ def methodRayDiff(C0, dir, hits):
         newDir = doVirtualIterations(C0, newDir, hits)
     if iteration_strategy == 1:
         newDir = doRealIterations(C0, dir, newDir, hits)
-    
+    if iteration_strategy == 2:
+        newDir = doReverseRealIterations(C0, dir, hits)
+
     newDir /= np.linalg.norm(newDir)
     return newDir
 
@@ -235,10 +237,7 @@ def doRealIterations(C0, dir, newDir, hits):
             hit = closestIntersect(ray2, prevPlane)
 
             # last hit or T>0 and front face hit
-            #testPPlane = (hit is None) or (phit.T() > 0)
-            #testPPlane = (hit is None) or (phit.T() > 0 and np.dot(N, ray2.D()) < 0)
             testPPlane = (phit.T() > 0) and (np.dot(N, ray2.D()) < 0)
-            #testPPlane = (hit is None) or (phit.T() > 0 and np.dot(LastPlaneN, ray2.D()) < 0)
 
             if testPPlane:
                 PStar = phit.P()
@@ -332,6 +331,109 @@ def doVirtualIterations(C0, newDir, hits):
     
     return bestDir
 
+def doReverseRealIterations(C0, dir, hits):
+    if len(hits) == 0:
+        return None
+    P = hits[-1].P()
+    d0Start = -dir
+    if len(hits) >= 2:
+        d0Start = hits[-2].P() - hits[-1].P()
+
+    # camera plane at C0
+    CPlane = Plane(C0, C0 + [dir[1], -dir[0]])  # create plane orthogonal to dir at C0
+    assert np.dot(CPlane.N(), dir) > 0.0 # make sure normal points "forward"
+
+    bestDiff = float('inf')
+    bestDir0 = d0Start # direction from P to C0
+    bestDirN = dir # direction from C0 to P
+    nextS = 0 # actually, just repeat the d0Start ray to determine the error
+    fails = 0 # number of iterations without improvement
+
+    onlyPositiveMultiplier = True # check if only positive multipliers have been used
+    stepMultiplier = 1.0
+    print("-----------------------------------------------------------------------------")
+    # refine newDir over multiple iterations
+    for i in range(-1, iterations): # do one extra iteration for the step that we could already determine via reverse
+        ray2 = Ray(P, bestDir0)
+        if fails > 0:
+            if Ray.use_normal_differential:
+                stepMultiplier = stepMultiplier * 0.5
+            else:
+                sign = (-1) ** (fails+1)
+                exponent = -((fails + 1) // 2)
+                stepMultiplier = sign * pow(2.0, exponent)
+            print(f"It: {i} no improvement (diff={lastBestDiff:.4g}, steps={lastNumSteps}), trying stepMultiplier={stepMultiplier}")
+        else:
+            if Ray.use_normal_differential:
+                stepMultiplier = min(1.0, stepMultiplier * 2.0) # try to increase step size again (like bitterli)
+            else:
+                stepMultiplier = 1.0
+
+        ray2 = ray2.shiftS(nextS * stepMultiplier) # proposed s value based on best direction
+        initial_dir = ray2.D().copy() # initial direction for this iteration
+        prevPlane = None
+        foundBetter = False
+        lastBestDiff = float('inf')
+        lastNumSteps = 0
+
+        # trace similar number of bounces as original ray
+        for iHit in range(len(hits) + EXTRA_BOUNCES):
+            chit = ray2.calcHit(CPlane, forceIntersect=True)
+            hit = closestIntersect(ray2, prevPlane)
+
+            # last hit or T>0 and front face hit
+            testCPlane = (chit.T() > 0) and (np.dot(CPlane.N(), ray2.D()) < 0)
+
+            if testCPlane:
+                CStar = chit.P()
+                diff = np.linalg.norm(C0 - CStar)**2
+                if hit is not None: # TODO penalie this even more, since we shouldnt hit anything before hitting the camera
+                    diff += max(0.0, np.dot(CPlane.N(), hit.P() - C0))**2 # penalize if in front of camera plane (but not on or behind)
+                throughputPenalty = True
+                if throughputPenalty:
+                    diff *= (1 + 0.1 * abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
+
+                if diff < lastBestDiff: # for logging
+                    lastBestDiff = diff
+                    lastNumSteps = iHit + 1
+
+                if diff < bestDiff:
+                    bestDiff = diff
+                    bestDir0 = initial_dir.copy()
+                    bestDirN = -ray2.D().copy()
+
+                    # calc current solution for ray2 differential (CStar + s * dP = P <=> s * dP = P - CStar)
+                    dC = ray2.transfer(chit).dP()
+                    nextS = solveLinearEq(dC, C0 - CStar)
+                    foundBetter = True
+
+            if hit is None:
+                break # finished with this iteration
+
+            prevPlane = hit.Plane()
+            ray2 = ray2.transfer(hit)
+            ray2 = ray2.sampleNext(hit)
+            if ray2 is None: break # refraction not possible 
+
+        if not foundBetter:
+            fails += 1
+            if (i + 1) == iterations and i >= 0:
+                print(f"It: {i+1} no improvement (diff={lastBestDiff:.4g}, steps={lastNumSteps})")
+        else:
+            if onlyPositiveMultiplier and stepMultiplier < 0:
+                onlyPositiveMultiplier = False
+            print(f"It: {i+1} found better solution with diff={bestDiff:.4g}, steps={lastNumSteps}, nextS={nextS:.4g} using stepMultiplier={stepMultiplier}.")
+            fails = 0
+
+        if draw_last_iteration and (i + 1) == iterations:
+            rhits = reverseHits(C0, dir, hits)
+            trace_and_draw_actual(P, initial_dir, rhits, color='red', label=LABEL_RAY2_ITERATION)
+
+    if not onlyPositiveMultiplier:
+        print("WARNING: negative step multipliers were used during real iterations.")
+
+    return bestDirN
+
 # ---------------------------------------------------------------
 # Reverse Ray Differential Method
 # ---------------------------------------------------------------
@@ -395,6 +497,18 @@ def solveForDD0(Jdp, dPn, D0):
     dD0 = mul(invA, b)
     return dD0
 
+# reverses hits so that they go from P to C0
+def reverseHits(C0, dir, hits):
+    virtualT = np.dot(C0 - hits[0].P(), -dir)
+    virtualC1 = hits[0].P() - dir * virtualT # position of C1 on the virtual plane defined by C0 with normal dir
+
+    rhits = []
+    for i in range(len(hits) - 2, -1, -1):
+        rhit = Hit(hits[i].Plane(), hits[i].P(), hits[i+1].T())
+        rhits.append(rhit)
+    rhits.append(Hit(Plane(virtualC1, virtualC1 + [dir[1], -dir[0]]), virtualC1, virtualT)) # virtual plane at C0
+    return rhits
+
 def methodReverseRayDiff(C0, C1, dir, hits):
     if len(hits) == 0:
         return dir
@@ -449,11 +563,7 @@ def methodReverseRayDiff(C0, C1, dir, hits):
     print(f"Final Reverse Ray Diff: dD0={dD0}, dDn={dDn}, newDir={newDir}")
 
     # create reverse hits (for drawing and iterations)
-    rhits = []
-    for i in range(len(hits) - 2, -1, -1):
-        rhit = Hit(hits[i].Plane(), hits[i].P(), hits[i+1].T())
-        rhits.append(rhit)
-    rhits.append(Hit(Plane(virtualC1, virtualC1 + [-dir[1], dir[0]]), virtualC1, virtualT)) # virtual plane at C0
+    rhits = reverseHits(C0, dir, hits)
 
     if draw_guess:
         # draw the ray differential from P that goes to C0 with initial differential dD0
@@ -478,6 +588,8 @@ def methodReverseRayDiff(C0, C1, dir, hits):
         newDir = doVirtualIterations(C0, newDir, hits)
     if iteration_strategy == 1:
         newDir = doRealIterations(C0, dir, newDir, hits)
+    if iteration_strategy == 2:
+        newDir = doReverseRealIterations(C0, dir, hits)
     
     newDir /= np.linalg.norm(newDir)
     return newDir
