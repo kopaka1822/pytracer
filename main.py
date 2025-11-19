@@ -728,6 +728,14 @@ def methodRayLength(C0, C1, dir, hits):
 
     newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
+
+    if iteration_strategy == 0:
+        newDir = doVirtualIterations(C0, newDir, hits)
+    if iteration_strategy == 1:
+        newDir = doRealIterations(C0, dir, newDir, hits)
+    #if iteration_strategy == 2:
+    #    newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=-(ray2.D() + lastS * ray2.dD()))
+
     return newDir
 
 # matrix multiplication
@@ -766,6 +774,14 @@ def methodReflectAndShear(C0, dir, hits):
 
     newDir = Pnew - C0
     newDir /= np.linalg.norm(newDir)
+
+    if iteration_strategy == 0:
+        newDir = doVirtualIterations(C0, newDir, hits)
+    if iteration_strategy == 1:
+        newDir = doRealIterations(C0, dir, newDir, hits)
+    #if iteration_strategy == 2:
+    #    newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=-(ray2.D() + lastS * ray2.dD()))
+
     return newDir
 
 # ---------------------------------------------------------------
