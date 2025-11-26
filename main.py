@@ -512,14 +512,14 @@ def solveForDD0(Jdp, dPn, D0):
 # Manifold Exploration Method
 # ---------------------------------------------------------------
 
-def computeDerivatives(p0, hits):
+def computeDerivatives(hits):
     if len(hits) < 2:
         return []
     
     derivatives = []
     
-    for i in range(len(hits) - 1):
-        p_prev = p0 if i == 0 else hits[i-1].P()
+    for i in range(1, len(hits) - 1):
+        p_prev = hits[i-1].P()
         p_curr = hits[i].P()
         p_next = hits[i+1].P()
         
@@ -549,190 +549,140 @@ def computeDerivatives(p0, hits):
         # Get surface properties
         n = hits[i].ShadingN()
         
-        # In 2D, the tangent vector along the surface
-        plane_dir = hits[i].Plane().P2() - hits[i].Plane().P1()
-        plane_dir = plane_dir / np.linalg.norm(plane_dir)
-        
-        # Tangent vectors (in 2D we have one tangent direction)
-        # dpdu is along the plane, dpdv would be along the normal (but in 2D this is just the normal)
-        dpdu = plane_dir
-        dpdv = n  # perpendicular to the surface
-        
-        # Normal derivatives (using the plane's CalcDN method)
-        dndu = hits[i].Plane().CalcDN(p_curr, dpdu)
-        dndv = hits[i].Plane().CalcDN(p_curr, dpdv)
+        # tangent u (in 3D we would need two tangents, in 2D just one)
+        u = hits[i].Tangent()
+        dndu = hits[i].Plane().CalcDN(p_curr, u)
+        dpdu = u # we dont have textcoords here, so moving one unit on the uv tangent is one unit in space
         
         # Useful projections
         dot_H_n = np.dot(n, H)
         dot_H_dndu = np.dot(dndu, H)
-        dot_H_dndv = np.dot(dndv, H)
         dot_u_n = np.dot(dpdu, n)
-        dot_v_n = np.dot(dpdv, n)
         
-        # Local shading tangent frame (project tangents onto tangent plane)
-        s = dpdu - dot_u_n * n
-        t = dpdv - dot_v_n * n
-        
-        # Normalize s and t if non-zero
-        s_len = np.linalg.norm(s)
-        t_len = np.linalg.norm(t)
-        if s_len > 1e-8:
-            s = s / s_len
-        if t_len > 1e-8:
-            t = t / t_len
-        
+        # Local shading tangent frame
+        s = dpdu - dot_u_n * n # in 2D: same as rotating n by 90 degrees
         ilo = ilo * eta * ilh
         ili = ili * ilh
         
-        # ---- Derivatives of C with respect to x_{i-1} ----
-        # Get tangent vectors at previous hit
-        plane_dir_prev = hits[i-1].Plane().P2() - hits[i-1].Plane().P1()
-        plane_dir_prev = plane_dir_prev / np.linalg.norm(plane_dir_prev)
-        dpdu_prev = plane_dir_prev
-        dpdv_prev = hits[i-1].ShadingN()
-        
-        dH_du = (dpdu_prev - wi * np.dot(wi, dpdu_prev)) * ili
-        dH_dv = (dpdv_prev - wi * np.dot(wi, dpdv_prev)) * ili
+        # Derivatives of C with respect to x_{i-1} 
+        dH_du = (hits[i-1].Tangent() - wi * np.dot(wi, hits[i-1].Tangent())) * ili
         dH_du = dH_du - H * np.dot(dH_du, H)
-        dH_dv = dH_dv - H * np.dot(dH_dv, H)
         
         A = np.array([
-            [np.dot(dH_du, s), np.dot(dH_dv, s)],
-            [np.dot(dH_du, t), np.dot(dH_dv, t)]
-        ])
+            [np.dot(dH_du, s)]
+        ]) # in 2D 1x1 matrix, in 3D would be 2x2
         
-        # ---- Derivatives of C with respect to x_i ----
+        # Derivatives of C with respect to x_i
         dH_du = -dpdu * (ili + ilo) + wi * (np.dot(wi, dpdu) * ili) + wo * (np.dot(wo, dpdu) * ilo)
-        dH_dv = -dpdv * (ili + ilo) + wi * (np.dot(wi, dpdv) * ili) + wo * (np.dot(wo, dpdv) * ilo)
         dH_du = dH_du - H * np.dot(dH_du, H)
-        dH_dv = dH_dv - H * np.dot(dH_dv, H)
         
         B = np.array([
-            [np.dot(dH_du, s) - np.dot(dpdu, dndu) * dot_H_n - dot_u_n * dot_H_dndu,
-             np.dot(dH_dv, s) - np.dot(dpdu, dndv) * dot_H_n - dot_u_n * dot_H_dndv],
-            [np.dot(dH_du, t) - np.dot(dpdv, dndu) * dot_H_n - dot_v_n * dot_H_dndu,
-             np.dot(dH_dv, t) - np.dot(dpdv, dndv) * dot_H_n - dot_v_n * dot_H_dndv]
-        ])
+            [np.dot(dH_du, s) - np.dot(dpdu, dndu) * dot_H_n - dot_u_n * dot_H_dndu]
+        ]) # in 2D 1x1 matrix, in 3D would be 2x2
         
-        # ---- Derivatives of C with respect to x_{i+1} ----
-        # Get tangent vectors at next hit
-        plane_dir_next = hits[i+1].Plane().P2() - hits[i+1].Plane().P1()
-        plane_dir_next = plane_dir_next / np.linalg.norm(plane_dir_next)
-        dpdu_next = plane_dir_next
-        dpdv_next = hits[i+1].ShadingN()
-        
-        dH_du = (dpdu_next - wo * np.dot(wo, dpdu_next)) * ilo
-        dH_dv = (dpdv_next - wo * np.dot(wo, dpdv_next)) * ilo
+        # Derivatives of C with respect to x_{i+1} 
+        dH_du = (hits[i+1].Tangent() - wo * np.dot(wo, hits[i+1].Tangent())) * ilo
         dH_du = dH_du - H * np.dot(dH_du, H)
-        dH_dv = dH_dv - H * np.dot(dH_dv, H)
         
         C = np.array([
-            [np.dot(dH_du, s), np.dot(dH_dv, s)],
-            [np.dot(dH_du, t), np.dot(dH_dv, t)]
-        ])
+            [np.dot(dH_du, s)]
+        ]) # in 2D 1x1 matrix, in 3D would be 2x2
         
         derivatives.append((A, B, C))
     
-    return derivatives
+    # compute A, Ainv and Bn for later:
+    Bn = np.zeros(len(derivatives))
+    Bn[-1] = derivatives[-1][2][0,0] # C matrix from the last derivative set
+
+    A = np.zeros((len(derivatives), len(derivatives)))
+
+    for row in range(len(derivatives)):
+        if row > 0: A[row, row - 1] = derivatives[row][0][0,0] # A
+        A[row, row] = derivatives[row][1][0,0] # B
+        if row + 1 < len(derivatives): A[row, row + 1] = derivatives[row][2][0,0] # C
+
+    Ainv = np.linalg.inv(A)
+
+    print(f"ME Derivatives: A=\n{A}, Ainv=\n{Ainv}, Bn={Bn}")
+    
+    return Ainv, Bn
 
 def methodManifoldExplore(C0, C1, dir, hits):
-    """
-    Manifold exploration method for path reconnection.
-    Uses derivatives to walk on the specular manifold and find a valid path from C0.
-    """
     if len(hits) < 2:
         return dir
     
-    # Compute derivatives for all interior vertices
-    derivatives = computeDerivatives(hits)
-    
-    if len(derivatives) == 0:
-        # Not enough hits to compute derivatives, fall back to simple direction
-        return (hits[-1].P() - C0) / np.linalg.norm(hits[-1].P() - C0)
-    
-    # Build the constraint Jacobian matrix
-    # For a path with n hits, we have (n-2) constraint equations (one per interior vertex)
-    # Each constraint is 2D, so we have 2*(n-2) total constraints
-    # The variables are the 2D positions of interior vertices: 2*(n-2) variables
-    
-    n_interior = len(derivatives)  # Number of interior vertices (excluding endpoints)
-    n_constraints = 2 * n_interior
-    n_vars = 2 * n_interior
-    
-    if n_vars == 0:
-        return dir
-    
-    # Build the Jacobian matrix (constraint derivatives)
-    # The Jacobian is block-tridiagonal with 2x2 blocks A, B, C
-    J = np.zeros((n_constraints, n_vars))
-    
-    for i, (A, B, C) in enumerate(derivatives):
-        row_start = i * 2
-        col_start = i * 2
+    # in normal ME, x1 is fixed and xn is varied. We want to vary x1 (C1->C0) and keep P fixed (xn), so we reverse the hits
+    rhits = reverseHits(C0, dir, hits, includeP=True)
+
+    beta = 1.0
+    for i in range(iterations + 1):
+        dp = C0 - rhits[-1].P() # = (xn'-xn). rhits[-1] should be C1 initially (but projected onto the C0 plane)
+        Tp1 = rhits[1].Plane().Tangent() # = T(x2) dim: 2x1
+        Tpn = rhits[-1].Plane().Tangent() # = T(xn) dim: 2x1
+        P1 = np.zeros(len(rhits) - 1) # = P2: dim: 1xn
+        P1[1] = 1.0 # only extract the second vertex 
+        P1 = P1.T
+        # TODO this could be cached, only required if rhits changes
+        Ainv, Bn = computeDerivatives(rhits) # Ainv: dim: nxn, Bn: dim: nx1
+
+        p1new = rhits[1].P() - beta * (Tp1 @ P1 @ Ainv @ Bn @ Tpn.T @ dp)
+        p0dir = p1new - rhits[0].P()
+        rhitsnew = [rhits[0]]
+
+        # trace new hits
+        ray2 = Ray(rhits[0].P(), p0dir)
+        prevPlane = hits[-1].Plane() # plane at P
+        cplane = rhits[-1].Plane() # plane at C0 (final plane)
+
+        for j in range(1, len(rhits) - 1):
+            hit2 = closestIntersect(ray2, prevPlane)
+            if hit2 is None:
+                break # TODO intersect with P-plane
+            rhitsnew.append(hit2)
+            ray2 = ray2.transfer(hit2)
+            ray2 = ray2.sampleNext(hit2)
+            if ray2 is None:
+                break
+            prevPlane = hit2.Plane()
         
-        # The matrix structure for constraint i depends on vertices i-1, i, i+1
-        # But in our indexing, the first interior vertex is index 1 in hits
+        # final intersection with C0 plane
+        if ray2 is not None:
+            hit2 = ray2.calcHit(cplane, forceIntersect=True)
+            if hit2.T() > 0:
+                rhitsnew.append(hit2)
+
+        foundBetter = False
+        if len(rhitsnew) != len(rhits):
+            print(f"ME {i}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, reducing beta.")
+        else:
+            # check if error got smaller
+            dpnew = C0 - rhitsnew[-1].P()
+            if np.linalg.norm(dpnew) < np.linalg.norm(dp):
+                rhits = rhitsnew
+                print(f"ME {i}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}, beta={beta:.4g}.")
+                beta = min(1.0, beta * 2.0)
+                foundBetter = True
         
-        if i > 0:
-            # Derivative w.r.t. x_{i-1} (previous interior vertex)
-            J[row_start:row_start+2, col_start-2:col_start] = A
-        
-        # Derivative w.r.t. x_i (current interior vertex)
-        J[row_start:row_start+2, col_start:col_start+2] = B
-        
-        if i < n_interior - 1:
-            # Derivative w.r.t. x_{i+1} (next interior vertex)
-            J[row_start:row_start+2, col_start+2:col_start+4] = C
-    
-    # The constraint violation: we want to move the endpoints
-    # Start from C0 instead of C1, and keep the final point P the same
-    # The change in the first vertex position (C1 -> C0)
-    delta_start = C0 - C1
-    
-    # Compute the constraint violation (how much constraints are violated)
-    # by moving the start point
-    # This requires computing how the constraint changes w.r.t. the start point
-    
-    # For simplicity, we can use a Newton step to adjust interior vertices
-    # to maintain constraints when the start point changes
-    
-    # The constraint equation at vertex i is: C_i(x_{i-1}, x_i, x_{i+1}) = 0
-    # When we change the start point, we need: C_i(x_{i-1}', x_i', x_{i+1}') = 0
-    
-    # For the first interior vertex (i=1 in hits), the change affects x_0 (= C1)
-    # We need to account for this in the right-hand side
-    
-    # Compute RHS: effect of changing the starting point
-    rhs = np.zeros(n_constraints)
-    
-    # The first constraint is affected by changing x_0 (the start point)
-    if n_interior > 0:
-        A_0, _, _ = derivatives[0]
-        # Effect of changing x_0 on the first constraint
-        rhs[0:2] = -A_0 @ delta_start
-    
-    # Solve J * delta_x = rhs for the changes in interior vertex positions
-    try:
-        # Use least squares in case the system is ill-conditioned
-        delta_x, residuals, rank, s = np.linalg.lstsq(J, rhs, rcond=None)
-        
-        # The new direction from C0 is towards the adjusted first interior vertex
-        # The first interior vertex is hits[1]
-        new_first_interior = hits[1].P() + delta_x[0:2]
-        newDir = new_first_interior - C0
-        newDir = newDir / np.linalg.norm(newDir)
-        
-        return newDir
-    except np.linalg.LinAlgError:
-        # If solving fails, fall back to simple direction
-        return (hits[-1].P() - C0) / np.linalg.norm(hits[-1].P() - C0)
+        if not foundBetter:
+            beta = beta * 0.5
+            print(f"ME {i}: no improvement, reducing beta to {beta:.4g}.")
+
+    newDir = rhits[1].P() - rhits[0].P()
+    return newDir / np.linalg.norm(newDir)
+
+
 
 # reverses hits so that they go from P to C0
-def reverseHits(C0, dir, hits):
+def reverseHits(C0, dir, hits, includeP=False):
     virtualT = np.dot(C0 - hits[0].P(), -dir)
     virtualC1 = hits[0].P() - dir * virtualT # position of C1 on the virtual plane defined by C0 with normal dir
 
     rhits = []
+    if includeP:
+        P = hits[-1].P()
+        dirn = -dir if len(hits) < 2 else hits[-2].P() - hits[-1].P()
+        rhits.append(Hit(Plane(P, P + [dirn[1], -dirn[0]]), P, 0)) # virtual plane at P
+    
     for i in range(len(hits) - 2, -1, -1):
         rhit = Hit(hits[i].Plane(), hits[i].P(), hits[i+1].T())
         rhits.append(rhit)

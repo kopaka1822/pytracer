@@ -36,6 +36,10 @@ class Plane:
     def N(self) -> np.ndarray:
         return self._normal
     
+    def Tangent(self) -> np.ndarray:
+        dir_vec = self._P2 - self._P1
+        return dir_vec / np.linalg.norm(dir_vec)
+    
     # unnormalized shading normal
     def UnnormalizedShadingN(self, P: np.ndarray) -> np.ndarray:
         # Linear interpolation/extrapolation of shading normal based on position P
@@ -73,7 +77,7 @@ class Plane:
     
     def ShapeMatrix(self, P: np.ndarray) -> np.ndarray:
         n = self.UnnormalizedShadingN(P)
-        f = 1.0 / pow(np.dot(n, n), 1.5) # normalization factor
+        f = 1.0 / (np.dot(n, n) ** 1.5) # normalization factor
         dir_vec = self._P2 - self._P1
         const = np.outer(self._normal2 - self._normal1, dir_vec) / np.dot(dir_vec, dir_vec)
         

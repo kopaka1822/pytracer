@@ -21,6 +21,9 @@ class Hit:
         if self._forcedNormal is not None:
             return 0.0
         return self._plane.CalcDN(self._point, dP)
+    
+    def Tangent(self) -> np.ndarray:
+        return self._plane.Tangent()
 
     def P(self) -> np.ndarray:
         return self._point
