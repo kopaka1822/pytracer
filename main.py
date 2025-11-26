@@ -591,8 +591,8 @@ def computeDerivatives(hits):
         derivatives.append((A, B, C))
     
     # compute A, Ainv and Bn for later:
-    Bn = np.zeros(len(derivatives))
-    Bn[-1] = derivatives[-1][2][0,0] # C matrix from the last derivative set
+    Bn = np.zeros((len(derivatives), 1))
+    Bn[-1][0] = derivatives[-1][2][0,0] # C matrix from the last derivative set
 
     A = np.zeros((len(derivatives), len(derivatives)))
 
@@ -617,15 +617,16 @@ def methodManifoldExplore(C0, C1, dir, hits):
     beta = 1.0
     for i in range(iterations + 1):
         dp = C0 - rhits[-1].P() # = (xn'-xn). rhits[-1] should be C1 initially (but projected onto the C0 plane)
-        Tp1 = rhits[1].Plane().Tangent() # = T(x2) dim: 2x1
-        Tpn = rhits[-1].Plane().Tangent() # = T(xn) dim: 2x1
-        P1 = np.zeros(len(rhits) - 1) # = P2: dim: 1xn
+        dp = dp.reshape((2,1)) # dim: 2x1
+        Tp1 = rhits[1].Plane().Tangent().reshape((2,1)) # = T(x2) dim: 2x1
+        TpnT = rhits[-1].Plane().Tangent().reshape((1,2)) # = T(xn)^T dim: 1x2
+        P1 = np.zeros(len(rhits) - 2) # = P2: dim: 1xn
         P1[1] = 1.0 # only extract the second vertex 
-        P1 = P1.T
+        P1 = P1.reshape((1, len(rhits) - 2)) # dim: 1xn
         # TODO this could be cached, only required if rhits changes
         Ainv, Bn = computeDerivatives(rhits) # Ainv: dim: nxn, Bn: dim: nx1
 
-        p1new = rhits[1].P() - beta * (Tp1 @ P1 @ Ainv @ Bn @ Tpn.T @ dp)
+        p1new = rhits[1].P() - beta * (Tp1 @ P1 @ Ainv @ Bn @ TpnT @ dp)
         p0dir = p1new - rhits[0].P()
         rhitsnew = [rhits[0]]
 
