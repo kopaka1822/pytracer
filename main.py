@@ -626,7 +626,13 @@ def methodManifoldExplore(C0, C1, dir, hits):
         # TODO this could be cached, only required if rhits changes
         Ainv, Bn = computeDerivatives(rhits) # Ainv: dim: nxn, Bn: dim: nx1
 
-        p1new = rhits[1].P() - beta * (Tp1 @ P1 @ Ainv @ Bn @ TpnT @ dp)
+        # intermediate results
+        tangentOffsetN = TpnT @ dp # dim: 1x1
+        tangentOffset1 = P1 @ Ainv @ Bn @ tangentOffsetN # dim: 1x1
+        offsetVector1 = Tp1 @ tangentOffset1 # dim: 2x1
+        print(f"ME {i}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
+
+        p1new = rhits[1].P() - beta * offsetVector1.flatten()
         p0dir = p1new - rhits[0].P()
         rhitsnew = [rhits[0]]
 
@@ -668,7 +674,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
             beta = beta * 0.5
             print(f"ME {i}: no improvement, reducing beta to {beta:.4g}.")
 
-    newDir = rhits[1].P() - rhits[0].P()
+    newDir = rhits[-2].P() - rhits[-1].P()
     return newDir / np.linalg.norm(newDir)
 
 
