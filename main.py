@@ -531,28 +531,26 @@ def computeDerivatives(hits):
         wi = wi * ili # normalize
         wo = wo * ilo
         
-        # Get the relative index of refraction at this vertex
-        eta = 1.0
-        if hits[i].Plane().Ior() != 1.0:
-            # Determine eta based on ray direction and surface normal
-            N = hits[i].Plane().N()
-            if np.dot(N, wi) < 0:
-                eta = hits[i].Plane().Ior()
-            else:
-                eta = 1.0 / hits[i].Plane().Ior()
+        # Surface properties
+        eta = hits[i].Plane().Ior()
+        n = hits[i].ShadingN()
+        N = hits[i].Plane().N() # geometric normal
+        dpdu = hits[i].Tangent() # geometric tangent
+        dndu = hits[i].CalcDN(dpdu)
+        
+        # Determine eta based on ray direction and surface normal
+        if np.dot(N, wi) < 0:
+            # flip normals if looking from below
+            N = -N
+            n = -n
+            dndu = -dndu
+        else: # dot(N, wi) > 0
+            eta = 1.0 / eta # flip eta (n1 = 1, n2 = IOR)
         
         # Half-vector (generalized for refraction)
         H = wi + eta * wo
         ilh = 1.0 / np.linalg.norm(H)
         H = H * ilh # normalize
-        
-        # Get surface properties
-        n = hits[i].ShadingN()
-        
-        # tangent u (in 3D we would need two tangents, in 2D just one)
-        u = hits[i].Tangent()
-        dndu = hits[i].Plane().CalcDN(p_curr, u)
-        dpdu = u # we dont have textcoords here, so moving one unit on the uv tangent is one unit in space
         
         # Useful projections
         dot_H_n = np.dot(n, H)
@@ -608,8 +606,8 @@ def computeDerivatives(hits):
     return Ainv, Bn
 
 def methodManifoldExplore(C0, C1, dir, hits):
-    if len(hits) < 2:
-        return dir
+    if len(hits) == 0: return dir # envmap hit
+    if len(hits) == 1: return hits[0].P() - C0 # direct connection
     
     # in normal ME, x1 is fixed and xn is varied. We want to vary x1 (C1->C0) and keep P fixed (xn), so we reverse the hits
     rhits = reverseHits(C0, dir, hits, includeP=True)
@@ -621,7 +619,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
         Tp1 = rhits[1].Plane().Tangent().reshape((2,1)) # = T(x2) dim: 2x1
         TpnT = rhits[-1].Plane().Tangent().reshape((1,2)) # = T(xn)^T dim: 1x2
         P1 = np.zeros(len(rhits) - 2) # = P2: dim: 1xn
-        P1[1] = 1.0 # only extract the second vertex 
+        P1[0] = 1.0 # only extract the second vertex (which is the first entry in the A matrix)
         P1 = P1.reshape((1, len(rhits) - 2)) # dim: 1xn
         # TODO this could be cached, only required if rhits changes
         Ainv, Bn = computeDerivatives(rhits) # Ainv: dim: nxn, Bn: dim: nx1
@@ -632,7 +630,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
         offsetVector1 = Tp1 @ tangentOffset1 # dim: 2x1
         print(f"ME {i}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
 
-        p1new = rhits[1].P() - beta * offsetVector1.flatten()
+        p1new = rhits[1].P() - beta * offsetVector1.flatten() # why does wenzel use - ?
         p0dir = p1new - rhits[0].P()
         rhitsnew = [rhits[0]]
 
@@ -645,6 +643,8 @@ def methodManifoldExplore(C0, C1, dir, hits):
             hit2 = closestIntersect(ray2, prevPlane)
             if hit2 is None:
                 break # TODO intersect with P-plane
+            if draw_last_iteration and i == iterations:
+                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=LABEL_RAY2_ITERATION if j == 1 else None)
             rhitsnew.append(hit2)
             ray2 = ray2.transfer(hit2)
             ray2 = ray2.sampleNext(hit2)
@@ -656,6 +656,8 @@ def methodManifoldExplore(C0, C1, dir, hits):
         if ray2 is not None:
             hit2 = ray2.calcHit(cplane, forceIntersect=True)
             if hit2.T() > 0:
+                if draw_last_iteration and i == iterations:
+                    ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=None)
                 rhitsnew.append(hit2)
 
         foundBetter = False
