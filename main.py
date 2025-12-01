@@ -613,7 +613,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
     rhits = reverseHits(C0, dir, hits, includeP=True)
 
     beta = 1.0
-    for i in range(iterations + 1):
+    for i in range(max(iterations, 1)):
         dp = C0 - rhits[-1].P() # = (xn'-xn). rhits[-1] should be C1 initially (but projected onto the C0 plane)
         dp = dp.reshape((2,1)) # dim: 2x1
         Tp1 = rhits[1].Plane().Tangent().reshape((2,1)) # = T(x2) dim: 2x1
@@ -628,7 +628,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
         tangentOffsetN = TpnT @ dp # dim: 1x1
         tangentOffset1 = P1 @ Ainv @ Bn @ tangentOffsetN # dim: 1x1
         offsetVector1 = Tp1 @ tangentOffset1 # dim: 2x1
-        print(f"ME {i}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
+        print(f"ME {i+1}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
 
         p1new = rhits[1].P() - beta * offsetVector1.flatten() # why does wenzel use - ?
         p0dir = p1new - rhits[0].P()
@@ -643,8 +643,10 @@ def methodManifoldExplore(C0, C1, dir, hits):
             hit2 = closestIntersect(ray2, prevPlane)
             if hit2 is None:
                 break # TODO intersect with P-plane
-            if draw_last_iteration and i == iterations:
+            if draw_last_iteration and i == iterations - 1:
                 ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=LABEL_RAY2_ITERATION if j == 1 else None)
+            if draw_guess and i == 0:
+                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if j == 1 else None)
             rhitsnew.append(hit2)
             ray2 = ray2.transfer(hit2)
             ray2 = ray2.sampleNext(hit2)
@@ -656,25 +658,27 @@ def methodManifoldExplore(C0, C1, dir, hits):
         if ray2 is not None:
             hit2 = ray2.calcHit(cplane, forceIntersect=True)
             if hit2.T() > 0:
-                if draw_last_iteration and i == iterations:
+                if draw_last_iteration and i == iterations - 1:
                     ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=None)
+                if draw_guess and i == 0:
+                    ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=None)
                 rhitsnew.append(hit2)
 
         foundBetter = False
         if len(rhitsnew) != len(rhits):
-            print(f"ME {i}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, reducing beta.")
+            print(f"ME {i+1}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, reducing beta.")
         else:
             # check if error got smaller
             dpnew = C0 - rhitsnew[-1].P()
             if np.linalg.norm(dpnew) < np.linalg.norm(dp):
                 rhits = rhitsnew
-                print(f"ME {i}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}, beta={beta:.4g}.")
+                print(f"ME {i+1}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}, beta={beta:.4g}.")
                 beta = min(1.0, beta * 2.0)
                 foundBetter = True
         
         if not foundBetter:
             beta = beta * 0.5
-            print(f"ME {i}: no improvement, reducing beta to {beta:.4g}.")
+            print(f"ME {i+1}: no improvement, reducing beta to {beta:.4g}.")
 
     newDir = rhits[-2].P() - rhits[-1].P()
     return newDir / np.linalg.norm(newDir)
