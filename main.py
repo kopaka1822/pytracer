@@ -601,7 +601,7 @@ def computeDerivatives(hits):
 
     Ainv = np.linalg.inv(A)
 
-    print(f"ME Derivatives: A=\n{A}, Ainv=\n{Ainv}, Bn={Bn}")
+    #print(f"ME Derivatives: A=\n{A}, Ainv=\n{Ainv}, Bn={Bn}")
     
     return Ainv, Bn
 
@@ -612,6 +612,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
     # in normal ME, x1 is fixed and xn is varied. We want to vary x1 (C1->C0) and keep P fixed (xn), so we reverse the hits
     rhits = reverseHits(C0, dir, hits, includeP=True)
 
+    print("-----------------------------------------------------------------------------")
     beta = 1.0
     for i in range(max(iterations, 1)):
         dp = C0 - rhits[-1].P() # = (xn'-xn). rhits[-1] should be C1 initially (but projected onto the C0 plane)
@@ -669,16 +670,18 @@ def methodManifoldExplore(C0, C1, dir, hits):
             print(f"ME {i+1}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, reducing beta.")
         else:
             # check if error got smaller
+            dpold = C0 - rhits[-1].P()
             dpnew = C0 - rhitsnew[-1].P()
-            if np.linalg.norm(dpnew) < np.linalg.norm(dp):
+            if np.linalg.norm(dpnew) < np.linalg.norm(dpold):
                 rhits = rhitsnew
-                print(f"ME {i+1}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}, beta={beta:.4g}.")
+                print(f"ME {i+1}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}.")
                 beta = min(1.0, beta * 2.0)
                 foundBetter = True
+            else:
+                print(f"ME {i+1}: no improvement (|dpold|={np.linalg.norm(dpold):.4g}, |dpnew|={np.linalg.norm(dpnew):.4g}), reducing beta.")
         
         if not foundBetter:
             beta = beta * 0.5
-            print(f"ME {i+1}: no improvement, reducing beta to {beta:.4g}.")
 
     newDir = rhits[-2].P() - rhits[-1].P()
     return newDir / np.linalg.norm(newDir)

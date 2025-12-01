@@ -86,10 +86,10 @@ glass_globe_scene = [
     #Plane([-10, -10], [10, -10]), # wall on the bottom
 ]
 addBox(glass_globe_scene, [-10, -10], [10, 10], ior=0.0)
-addCircle(glass_globe_scene, [0, 3], [3, 6], faceOutside=True, ior=1.5, numSegments=32)
+addCircle(glass_globe_scene, [0, 3], [3, 6], faceOutside=True, ior=1.5, numSegments=256)
 
 # SET SCENE ---------------------------------------------- #
-planes = reflection_scene
+planes = glass_globe_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
