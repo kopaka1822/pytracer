@@ -5,6 +5,8 @@ from plane import Plane
 from ray import Ray
 from hit import Hit
 from scenes import *
+from sampler import *
+import random
 
 # solves A * s = B for scalar s
 def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
@@ -37,7 +39,7 @@ monte_carlo = False # use monte carlo sampling for refraction/reflection decisio
 EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
 
 # new RNG seed (0..1)
-rng_seed = 0.5
+rng_seed = 0
 
 # labels
 LABEL_RAY = "original"
@@ -90,6 +92,10 @@ def draw_scene():
     ray = Ray(C1, dir)
     hits = []
     # main loop
+    sampler = DeterministicSampler()
+    if monte_carlo:
+        sampler = RandomSampler(rng_seed)
+
     for i in range(max_bounces):
         # Find the closest intersection
         hit = closestIntersect(ray, prevPlane)
@@ -103,7 +109,7 @@ def draw_scene():
         # Transfer the ray to the hit point
         ray = ray.transfer(hit)
         lastP = ray.P()
-        ray = ray.sampleNext(hit)
+        ray = ray.sampleNext(hit, sampler)
         if ray is None:
             break  # refraction not possible
         prevPlane = hit.Plane()
@@ -113,18 +119,18 @@ def draw_scene():
     ax.text(lastP[0]+0.2, lastP[1]+0.2, "P", color='g')
 
     if predict_strategy == 0:
-        newDir = methodRayDiff(C0, dir, hits)
+        newDir = methodRayDiff(C0, dir, hits, sampler.copy())
     if predict_strategy == 1:
-        newDir = methodReverseRayDiff(C0, C1, dir, hits)
+        newDir = methodReverseRayDiff(C0, C1, dir, hits, sampler.copy())
     if predict_strategy == 2:
-        newDir = methodManifoldExplore(C0, C1, dir, hits)
+        newDir = methodManifoldExplore(C0, C1, dir, hits, sampler.copy())
         #newDir = methodRayLength(C0, C1, dir, hits)
     if predict_strategy == 3:
-        newDir = methodReflectAndShear(C0, dir, hits)
+        newDir = methodReflectAndShear(C0, dir, hits, sampler.copy())
     
     #if iteration_strategy == 1:
     # always draw actual path
-    trace_and_draw_actual(C0, newDir, hits)
+    trace_and_draw_actual(C0, newDir, hits, sampler.copy())
     #else: 
     #    draw_prediction(C0, newDir, hits)
 
@@ -135,7 +141,7 @@ def draw_scene():
 # Ray Differential Method
 # ---------------------------------------------------------------
 
-def methodRayDiff(C0, dir, hits):
+def methodRayDiff(C0, dir, hits, sampler):
     ray2 = Ray(C0, dir)
     lastS = 0.0 # last solution for ray2 differential
     for hit in hits:
@@ -160,7 +166,7 @@ def methodRayDiff(C0, dir, hits):
         s = solveLinearEq(dP, P - PStar)
         lastS = s
 
-        nextRay = ray2.sampleNext(hit2)
+        nextRay = ray2.sampleNext(hit2, sampler)
         if nextRay is not None and hit != hits[-1]: # update ray2 except for last hit
             ray2 = nextRay
 
@@ -185,16 +191,15 @@ def methodRayDiff(C0, dir, hits):
     initial_ray = Ray(C0, dir)
     newDir = initial_ray.shiftS(lastS).D()
     if iteration_strategy == 0:
-        newDir = doVirtualIterations(C0, newDir, hits)
+        newDir = doVirtualIterations(C0, newDir, hits, sampler.copy())
     if iteration_strategy == 1:
-        newDir = doRealIterations(C0, dir, newDir, hits)
+        newDir = doRealIterations(C0, dir, newDir, hits, sampler.copy())
     if iteration_strategy == 2:
-        newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=-(ray2.D() + lastS * ray2.dD()))
-
+        newDir = doReverseRealIterations(C0, dir, newDir, hits, sampler.copy(), initialDir0=-(ray2.D() + lastS * ray2.dD()))
     newDir /= np.linalg.norm(newDir)
     return newDir
 
-def doRealIterations(C0, dir, newDir, hits):
+def doRealIterations(C0, dir, newDir, hits, sampler):
     if len(hits) == 0:
         return newDir
     P = hits[-1].P()
@@ -218,6 +223,7 @@ def doRealIterations(C0, dir, newDir, hits):
     # refine newDir over multiple iterations
     for i in range(iterations):
         ray2 = Ray(C0, bestDir)
+        sampler2 = sampler.copy()
         if fails > 0:
             #exponent = ((-1) ** (fails)) * ((fails + 1) // 2)
             if Ray.use_normal_differential:
@@ -281,7 +287,7 @@ def doRealIterations(C0, dir, newDir, hits):
 
             prevPlane = hit.Plane()
             ray2 = ray2.transfer(hit)
-            ray2 = ray2.sampleNext(hit)
+            ray2 = ray2.sampleNext(hit, sampler2)
             if ray2 is None: break # refraction not possible 
 
         if not foundBetter:
@@ -295,14 +301,14 @@ def doRealIterations(C0, dir, newDir, hits):
             fails = 0
 
         if draw_last_iteration and (i + 1) == iterations:
-            trace_and_draw_actual(C0, initial_dir, hits, color='red', label=LABEL_RAY2_ITERATION)
+            trace_and_draw_actual(C0, initial_dir, hits, sampler2.copy(), color='red', label=LABEL_RAY2_ITERATION)
 
     if not onlyPositiveMultiplier:
         print("WARNING: negative step multipliers were used during real iterations.")
 
     return bestDir
 
-def doVirtualIterations(C0, newDir, hits):
+def doVirtualIterations(C0, newDir, hits, sampler):
     P = hits[-1].P()
     bestDiff = float('inf')
     bestDir = newDir.copy()
@@ -323,7 +329,7 @@ def doVirtualIterations(C0, newDir, hits):
             if draw_last_iteration and (i + 1) == iterations and draw_differentials:
                 ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], 'r--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
 
-            nextRay = ray2.sampleNext(hit2)
+            nextRay = ray2.sampleNext(hit2, sampler)
             if nextRay is not None:
                 ray2 = nextRay
         
@@ -344,7 +350,7 @@ def doVirtualIterations(C0, newDir, hits):
     
     return bestDir
 
-def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
+def doReverseRealIterations(C0, dir, newDir, hits, sampler, initialDir0 = None):
     print("-----------------------------------------------------------------------------")
     if iterations <= 0: return newDir # do nothing
     if len(hits) == 0:
@@ -375,9 +381,13 @@ def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
     onlyPositiveMultiplier = True # check if only positive multipliers have been used
     stepMultiplier = 1.0
     
+    rsampler = sampler.reverse() # reverse sampler because we start at P and go back to C0
+
     # refine newDir over multiple iterations
     for i in range(iterations): # do one extra iteration for the step that we could already determine via reverse
         ray2 = Ray(P, bestDir0)
+        sampler2 = rsampler.copy()
+
         if fails > 0:
             if Ray.use_normal_differential:
                 stepMultiplier = stepMultiplier * 0.5
@@ -441,7 +451,7 @@ def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
 
             prevPlane = hit.Plane()
             ray2 = ray2.transfer(hit)
-            ray2 = ray2.sampleNext(hit)
+            ray2 = ray2.sampleNext(hit, sampler2)
             if ray2 is None: break # refraction not possible 
 
         if not foundBetter:
@@ -456,7 +466,7 @@ def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
 
         if draw_last_iteration and (i + 1) == iterations:
             rhits = reverseHits(C0, dir, hits)
-            trace_and_draw_actual(P, initial_dir, rhits, color='red', label=LABEL_RAY2_ITERATION, prevPlane=hits[-1].Plane())
+            trace_and_draw_actual(P, initial_dir, rhits, rsampler.copy(), color='red', label=LABEL_RAY2_ITERATION, prevPlane=hits[-1].Plane())
 
     if not onlyPositiveMultiplier:
         print("WARNING: negative step multipliers were used during real iterations.")
@@ -623,12 +633,13 @@ def computeDerivatives(hits):
     
     return Ainv, Bn
 
-def methodManifoldExplore(C0, C1, dir, hits):
+def methodManifoldExplore(C0, C1, dir, hits, sampler):
     if len(hits) == 0: return dir # envmap hit
     if len(hits) == 1: return hits[0].P() - C0 # direct connection
     
     # in normal ME, x1 is fixed and xn is varied. We want to vary x1 (C1->C0) and keep P fixed (xn), so we reverse the hits
     rhits = reverseHits(C0, dir, hits, includeP=True)
+    rsampler = sampler.reverse()
 
     print("-----------------------------------------------------------------------------")
     beta = 1.0
@@ -652,6 +663,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
         p1new = rhits[1].P() - beta * offsetVector1.flatten() # why does wenzel use - ?
         p0dir = p1new - rhits[0].P()
         rhitsnew = [rhits[0]]
+        rsamplernew = rsampler.copy()
 
         # trace new hits
         ray2 = Ray(rhits[0].P(), p0dir)
@@ -668,7 +680,7 @@ def methodManifoldExplore(C0, C1, dir, hits):
                 ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if j == 1 else None)
             rhitsnew.append(hit2)
             ray2 = ray2.transfer(hit2)
-            ray2 = ray2.sampleNext(hit2)
+            ray2 = ray2.sampleNext(hit2, rsamplernew)
             if ray2 is None:
                 break
             prevPlane = hit2.Plane()
@@ -723,7 +735,7 @@ def reverseHits(C0, dir, hits, includeP=False):
     rhits.append(Hit(Plane(virtualC1, virtualC1 + [dir[1], -dir[0]]), virtualC1, virtualT)) # virtual plane at C0
     return rhits
 
-def methodReverseRayDiff(C0, C1, dir, hits):
+def methodReverseRayDiff(C0, C1, dir, hits, sampler):
     if len(hits) == 0:
         return dir
     
@@ -778,6 +790,7 @@ def methodReverseRayDiff(C0, C1, dir, hits):
 
     # create reverse hits (for drawing and iterations)
     rhits = reverseHits(C0, dir, hits)
+    rsampler = sampler.reverse()
 
     if draw_guess:
         # draw the ray differential from P that goes to C0 with initial differential dD0
@@ -796,14 +809,14 @@ def methodReverseRayDiff(C0, C1, dir, hits):
             if draw_differentials and iterations == 0:
                 ax.plot([prevdP[0], curdP[0]], [prevdP[1], curdP[1]], 'b--', label=LABEL_RAY2_DIFF if rhit == rhits[0] else None)
 
-            rray = rray.sampleNext(rhit) # should be simply invertable in our case
+            rray = rray.sampleNext(rhit, rsampler) # should be simply invertable in our case
 
     if iteration_strategy == 0:
-        newDir = doVirtualIterations(C0, newDir, hits)
+        newDir = doVirtualIterations(C0, newDir, hits, sampler.copy())
     if iteration_strategy == 1:
-        newDir = doRealIterations(C0, dir, newDir, hits)
+        newDir = doRealIterations(C0, dir, newDir, hits, sampler.copy())
     if iteration_strategy == 2:
-        newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=R + dD0)
+        newDir = doReverseRealIterations(C0, dir, newDir, hits, sampler.copy(), initialDir0=R + dD0)
     
     newDir /= np.linalg.norm(newDir)
     return newDir
@@ -812,7 +825,7 @@ def methodReverseRayDiff(C0, C1, dir, hits):
 def draw_direction(C0, dir):
     ax.arrow(C0[0], C0[1], dir[0] * 1.5, dir[1] * 1.5, head_width=0.2, color='orange', length_includes_head=True, label=LABEL_RAY2_PRED)
 
-def draw_prediction(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
+def draw_prediction(C0, dir, hits, sampler, color='orange', label=LABEL_RAY2_PRED):
     if(len(hits) == 0):
         draw_direction(C0, dir)
         return
@@ -830,14 +843,14 @@ def draw_prediction(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED):
             if draw_differentials and iterations > 0:
                 ax.plot([prevP[0], curP[0]], [prevP[1], curP[1]], color=color, linestyle='--', label=LABEL_RAY2_DIFF if hit == hits[0] else None)
 
-            ray2 = ray2.sampleNext(hit2)
+            ray2 = ray2.sampleNext(hit2, sampler)
             if ray2 is None:
                 if hit2.Plane().Ior() != 0.0:
                     # draw x to indicate that path ended due to refraction failure
                     ax.plot(hit2.P()[0], hit2.P()[1], 'rx', markersize=12)
                 break # refraction not possible
 
-def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED, prevPlane=None):
+def trace_and_draw_actual(C0, dir, hits, sampler, color='orange', label=LABEL_RAY2_PRED, prevPlane=None):
     if(len(hits) == 0):
         draw_direction(C0, dir)
         return
@@ -872,14 +885,14 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED, 
             bestDiff = diff
             index = len(newHits) - 1
 
-        ray2 = ray2.sampleNext(hit)
+        ray2 = ray2.sampleNext(hit, sampler)
         if ray2 is None:
             break # refraction not possible
 
     if force_path_length: # draw full path
-        draw_prediction(C0, dir, newHits, color, label)
+        draw_prediction(C0, dir, newHits, sampler.copy(), color, label)
     else: # draw path up to lowest error
-        draw_prediction(C0, dir, newHits[:index+1], color, label)
+        draw_prediction(C0, dir, newHits[:index+1], sampler.copy(), color, label)
 
 # ---------------------------------------------------------------
 # Reflect and Shear methods
@@ -909,7 +922,7 @@ def matrixShear(O, N, s):
     ])
     return M
 
-def methodRayLength(C0, C1, dir, hits):
+def methodRayLength(C0, C1, dir, hits, sampler):
     rayLength = 0.0
     speed = 1.0
     ray = Ray(C1, dir) # only used for tracking direction
@@ -919,7 +932,7 @@ def methodRayLength(C0, C1, dir, hits):
             rayLength = rayLength / speed
         cosalpha = abs(np.dot(ray.D(), hit.Plane().N()))
         ray = ray.transfer(hit)
-        nextRay = ray.sampleNext(hit)
+        nextRay = ray.sampleNext(hit, sampler)
         if nextRay is not None:
             ray = nextRay
         cosbeta = abs(np.dot(ray.D(), hit.Plane().N()))
@@ -936,9 +949,9 @@ def methodRayLength(C0, C1, dir, hits):
     newDir /= np.linalg.norm(newDir)
 
     if iteration_strategy == 0:
-        newDir = doVirtualIterations(C0, newDir, hits)
+        newDir = doVirtualIterations(C0, newDir, hits, sampler.copy())
     if iteration_strategy == 1:
-        newDir = doRealIterations(C0, dir, newDir, hits)
+        newDir = doRealIterations(C0, dir, newDir, hits, sampler.copy())
     #if iteration_strategy == 2:
     #    newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=-(ray2.D() + lastS * ray2.dD()))
 
@@ -948,14 +961,14 @@ def methodRayLength(C0, C1, dir, hits):
 def mul(A, B):
     return np.matmul(A, B)
 
-def methodReflectAndShear(C0, dir, hits):
+def methodReflectAndShear(C0, dir, hits, sampler):
     # initialize viewTransform with a 3x3 identity matrix
     viewTransform = np.identity(3)
     ray = Ray(C1, dir) # only used for tracking direction
     for hit in hits[:-1]:
         I = -ray.D() # incomming direction
         eta = ray.eta(hit)
-        ray = ray.transfer(hit).sampleNext(hit)
+        ray = ray.transfer(hit).sampleNext(hit, sampler)
         R = ray.D() # outgoing direction
         H = (I + R) / np.linalg.norm(I + R)  # half-vector
         refraction = hit.Plane().Ior() != 1.0
@@ -982,12 +995,12 @@ def methodReflectAndShear(C0, dir, hits):
     newDir /= np.linalg.norm(newDir)
 
     if iteration_strategy == 0:
-        newDir = doVirtualIterations(C0, newDir, hits)
+        newDir = doVirtualIterations(C0, newDir, hits, sampler.copy())
     if iteration_strategy == 1:
-        newDir = doRealIterations(C0, dir, newDir, hits)
+        newDir = doRealIterations(C0, dir, newDir, hits, sampler.copy())
     if iteration_strategy == 2:
         lastDir = -mul(np.linalg.inv(viewTransform[:2,:2]), newDir)
-        newDir = doReverseRealIterations(C0, dir, newDir, hits, initialDir0=lastDir)
+        newDir = doReverseRealIterations(C0, dir, newDir, hits, sampler.copy(), initialDir0=lastDir)
 
     return newDir
 
@@ -1049,7 +1062,7 @@ checkbox_force_path_length = CheckButtons(ax_sliders[15], ["Force Path Length"],
 checkbox_monte_carlo = CheckButtons(ax_sliders[16], ["Monte Carlo refr."], [monte_carlo])
 
 # RNG seed slider (0..1)
-slider_rng_seed = Slider(ax_sliders[17], "RNG Seed", 0.0, 1.0, valinit=rng_seed)
+slider_rng_seed = Slider(ax_sliders[17], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
 
 # ---------------------------------------------------------------
 # Slider callbacks
@@ -1074,7 +1087,8 @@ def update(val):
     Ray.use_normal_differential = checkbox_use_n_differentials.get_status()[0]
     force_path_length = checkbox_force_path_length.get_status()[0]
     monte_carlo = checkbox_monte_carlo.get_status()[0]
-    rng_seed = slider_rng_seed.val
+    rng_seed = int(slider_rng_seed.val)
+
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations, slider_rng_seed]:

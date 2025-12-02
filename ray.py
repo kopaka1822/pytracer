@@ -1,6 +1,7 @@
 import numpy as np
 from hit import Hit
 from plane import Plane
+from sampler import DeterministicSampler, Sampler
 
 class Ray:
     # static variables
@@ -125,10 +126,39 @@ class Ray:
 
         return Ray(hit.P(), Dnew, self._dP, dDNew)
 
-    def sampleNext(self, hit: Hit) -> "Ray | None":
-        if hit.Plane().Ior() == 0.0:
-            return None # absorb: no next ray
+    def sampleNext(self, hit: Hit, sampler: Sampler = DeterministicSampler()) -> "Ray | None":
+        # get probabilites for reflection (pRefract is 1-pReflect)
+        pReflect = 0.0
+
         if hit.Plane().Ior() == 1.0:
+            pReflect = 1.0
+        elif hit.Plane().Ior() != 0.0:
+            N = hit.ShadingN()
+            I = self._D
+            # cos of incident angle (clamped)
+            cosi = np.clip(np.dot(N, -I), -1.0, 1.0)
+            # determine refractive indices
+            n1 = 1.0
+            n2 = hit.Plane().Ior()
+            if cosi < 0.0:
+                n1, n2 = n2, n1
+                cosi = abs(cosi)
+
+            # Schlick's approximation for Fresnel reflectance
+            R0 = ((n1 - n2) / (n1 + n2)) ** 2
+            R = R0 + (1.0 - R0) * ((1.0 - cosi) ** 5)
+
+            # check for total internal reflection (TIR)
+            eta = n1 / n2
+            sin_t2 = eta * eta * (1.0 - cosi * cosi)
+            if sin_t2 > 1.0:
+                pReflect = 1.0  # TIR
+            else:
+                pReflect = R
+
+        doReflect = sampler.nextReflection(pReflect) # make sure to trigger the sampler before returning
+        if hit.Plane().Ior() == 0.0: return None  # absorbent surface
+        if doReflect:
             return self.reflect(hit)
         else:
             return self.refract(hit)
