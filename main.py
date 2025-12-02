@@ -20,7 +20,7 @@ C0 = np.array([-9.9, 2.15])
 C1 = np.array([-8.55, 4.5])
 #C1_angle = -46.8  # in degrees
 C1_angle = 0.0
-max_bounces = 1
+max_bounces = 10
 draw_differentials = False
 draw_guess = True
 draw_normals = False
@@ -35,6 +35,9 @@ draw_last_iteration = True
 force_path_length = False # forces same path length for both camera paths
 monte_carlo = False # use monte carlo sampling for refraction/reflection decisions
 EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
+
+# new RNG seed (0..1)
+rng_seed = 0.5
 
 # labels
 LABEL_RAY = "original"
@@ -993,82 +996,88 @@ def methodReflectAndShear(C0, dir, hits):
 # ---------------------------------------------------------------
 
 fig = plt.figure(figsize=(10, 6))
+fig.canvas.manager.set_window_title('Pytracer')
 ax = fig.add_axes([0.07, 0.1, 0.6, 0.8])  # main plot area (left)
 
 # Slider panel
 ax_sliders = [
-    fig.add_axes([0.75, 0.95, 0.2, 0.03]),  # C1.x (moved up)
-    fig.add_axes([0.75, 0.90, 0.2, 0.03]),  # C1.y
-    fig.add_axes([0.75, 0.85, 0.2, 0.03]),  # C1 angle
-    fig.add_axes([0.75, 0.80, 0.2, 0.03]),  # Draw Normals checkbox
-    fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # C0.x
-    fig.add_axes([0.75, 0.70, 0.2, 0.03]),  # C0.y
-    fig.add_axes([0.75, 0.65, 0.2, 0.03]),  # Ray.tangent_scale
-    fig.add_axes([0.75, 0.60, 0.2, 0.03]),  # max bounces
-    fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # draw last iteration
-    fig.add_axes([0.75, 0.50, 0.2, 0.03]),  # draw differentials
-    fig.add_axes([0.75, 0.45, 0.2, 0.03]),  # draw guess
-    fig.add_axes([0.75, 0.40, 0.2, 0.03]),  # iterations
-    fig.add_axes([0.75, 0.28, 0.2, 0.1]),   # iteration strategy radio buttons
-    fig.add_axes([0.75, 0.18, 0.2, 0.1]),   # predict strategy radio buttons
-    fig.add_axes([0.75, 0.11, 0.2, 0.05]),   # use N differentials
-    fig.add_axes([0.75, 0.06, 0.2, 0.05]),   # force path length
-    fig.add_axes([0.75, 0.01, 0.2, 0.05]),   # monte carlo
+    fig.add_axes([0.75, 0.95, 0.2, 0.03]),  # 0 C1.x
+    fig.add_axes([0.75, 0.91, 0.2, 0.03]),  # 1 C1.y
+    fig.add_axes([0.75, 0.87, 0.2, 0.03]),  # 2 C1.angle
+    fig.add_axes([0.75, 0.83, 0.2, 0.03]),  # 3 C0.x
+    fig.add_axes([0.75, 0.79, 0.2, 0.03]),  # 4 C0.y
+    fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # 5 Max Bounces
+    fig.add_axes([0.75, 0.71, 0.2, 0.03]),  # 6 Draw Guess
+    fig.add_axes([0.75, 0.67, 0.2, 0.03]),  # 7 Draw Last Iteration
+    fig.add_axes([0.75, 0.63, 0.2, 0.03]),  # 8 Draw Differentials
+    fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Differential Scale
+    fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # 10 Draw Normals
+    fig.add_axes([0.75, 0.51, 0.2, 0.03]),  # 11 Iterations
+    fig.add_axes([0.75, 0.36, 0.2, 0.12]),  # 12 Predict strategy (radio)
+    fig.add_axes([0.75, 0.22, 0.2, 0.12]),  # 13 Iteration strategy (radio)
+    fig.add_axes([0.75, 0.16, 0.2, 0.03]),  # 14 Use N. Diff
+    fig.add_axes([0.75, 0.12, 0.2, 0.03]),  # 15 Force Path Length
+    fig.add_axes([0.75, 0.08, 0.2, 0.03]),  # 16 Monte Carlo
+    fig.add_axes([0.75, 0.04, 0.2, 0.03]),  # 17 RNG Seed
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
 slider_C1y = Slider(ax_sliders[1], "C1.y", -10.0, 10.0, valinit=C1[1])
 slider_C1a = Slider(ax_sliders[2], "C1.angle", -180.0, 180.0, valinit=C1_angle)
-checkbox_draw_normals = CheckButtons(ax_sliders[3], ["Draw Normals"], [draw_normals])
-slider_C0x = Slider(ax_sliders[4], "C0.x", -10.0, 10.0, valinit=C0[0])
-slider_C0y = Slider(ax_sliders[5], "C0.y", -10.0, 10.0, valinit=C0[1])
-slider_tangent_scale = Slider(ax_sliders[6], "Ray.tangent_scale", 0.001, 0.5, valinit=Ray.tangent_scale)
+slider_C0x = Slider(ax_sliders[3], "C0.x", -10.0, 10.0, valinit=C0[0])
+slider_C0y = Slider(ax_sliders[4], "C0.y", -10.0, 10.0, valinit=C0[1])
 # integer slider for max bounces
-slider_max_bounces = Slider(ax_sliders[7], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
-# checkbox for draw last iteration
-checkbox_draw_last_iteration = CheckButtons(ax_sliders[8], ["Draw Last Iteration"], [draw_last_iteration])
-# checkbox for draw differentials and guess
-checkbox_draw_differentials = CheckButtons(ax_sliders[9], ["Draw Differentials"], [draw_differentials])
-checkbox_draw_guess = CheckButtons(ax_sliders[10], ["Draw Guess"], [draw_guess])
-# integer slider for iterations
+slider_max_bounces = Slider(ax_sliders[5], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
+
+# checkboxes
+checkbox_draw_guess = CheckButtons(ax_sliders[6], ["Draw Guess"], [draw_guess])
+checkbox_draw_last_iteration = CheckButtons(ax_sliders[7], ["Draw Last Iteration"], [draw_last_iteration])
+checkbox_draw_differentials = CheckButtons(ax_sliders[8], ["Draw Differentials"], [draw_differentials])
+
+# differential scale and normals and iterations
+slider_tangent_scale = Slider(ax_sliders[9], "Differential Scale", 0.001, 0.5, valinit=Ray.tangent_scale)
+checkbox_draw_normals = CheckButtons(ax_sliders[10], ["Draw Normals"], [draw_normals])
 slider_iterations = Slider(ax_sliders[11], "Iterations ", 0, 20, valinit=iterations, valstep=1)
-# radio buttons for iteration strategy
-radio_iteration_strategy = RadioButtons(ax_sliders[12], iteration_strategies, active=iteration_strategy)
-# radio buttons for predict strategy
-radio_predict_strategy = RadioButtons(ax_sliders[13], predict_strategies, active=predict_strategy)
-# checkbox for use N differentials
+
+# radios (prediction first, then iteration strategy per request)
+radio_predict_strategy = RadioButtons(ax_sliders[12], predict_strategies, active=predict_strategy)
+radio_iteration_strategy = RadioButtons(ax_sliders[13], iteration_strategies, active=iteration_strategy)
+
+# remaining toggles
 checkbox_use_n_differentials = CheckButtons(ax_sliders[14], ["Use N Diff."], [Ray.use_normal_differential])
-# checkbox for path length
 checkbox_force_path_length = CheckButtons(ax_sliders[15], ["Force Path Length"], [force_path_length])
-# checkbox for monte carlo
 checkbox_monte_carlo = CheckButtons(ax_sliders[16], ["Monte Carlo refr."], [monte_carlo])
+
+# RNG seed slider (0..1)
+slider_rng_seed = Slider(ax_sliders[17], "RNG Seed", 0.0, 1.0, valinit=rng_seed)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration, rng_seed
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
     C0[0] = slider_C0x.val
     C0[1] = slider_C0y.val
     max_bounces = int(slider_max_bounces.val)
+    draw_guess = checkbox_draw_guess.get_status()[0]
     draw_last_iteration = checkbox_draw_last_iteration.get_status()[0]
     draw_differentials = checkbox_draw_differentials.get_status()[0]
-    draw_guess = checkbox_draw_guess.get_status()[0]
+    Ray.tangent_scale = slider_tangent_scale.val
     draw_normals = checkbox_draw_normals.get_status()[0]
     iterations = int(slider_iterations.val)
-    iteration_strategy = iteration_strategies.index(radio_iteration_strategy.value_selected)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
-    Ray.tangent_scale = slider_tangent_scale.val
+    iteration_strategy = iteration_strategies.index(radio_iteration_strategy.value_selected)
     Ray.use_normal_differential = checkbox_use_n_differentials.get_status()[0]
     force_path_length = checkbox_force_path_length.get_status()[0]
     monte_carlo = checkbox_monte_carlo.get_status()[0]
+    rng_seed = slider_rng_seed.val
     draw_scene()
 
-for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations]:
+for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations, slider_rng_seed]:
     s.on_changed(update)
 
 for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, radio_iteration_strategy, radio_predict_strategy, checkbox_force_path_length, checkbox_monte_carlo, checkbox_draw_last_iteration, checkbox_use_n_differentials]:
