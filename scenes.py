@@ -8,7 +8,7 @@ from hit import Hit
 # ---------------------------------------------------------------
 
 # adds the circle located at P with (2D) radius r.x r.y to the planes list
-def addCircle(planes, P, r, faceOutside, ior, numSegments=16):
+def addCircle(planes, P, r, faceOutside, ior, numSegments=128):
     for i in range(numSegments):
         theta1 = (i / numSegments) * 2 * np.pi
         theta2 = ((i + 1) / numSegments) * 2 * np.pi
@@ -64,8 +64,8 @@ addBox(refraction_scene, [-10, -10], [10, 10])
 
 glass_scene = []
 addBox(glass_scene, [-10, -10], [10, 10], ior=0.0)
-addCircle(glass_scene, [0, 3], [2, 2], faceOutside=True, ior=1.5, numSegments=32)
-addCircle(glass_scene, [0, 3], [1.8, 1.8], faceOutside=False, ior=1.5, numSegments=32)
+addCircle(glass_scene, [0, 3], [2, 2], faceOutside=True, ior=1.5)
+addCircle(glass_scene, [0, 3], [1.8, 1.8], faceOutside=False, ior=1.5)
 
 glasses_scene = [
     Plane([10, -40], [10, 40], ior=0.0), # wall on the right
@@ -86,7 +86,7 @@ glass_globe_scene = [
     #Plane([-10, -10], [10, -10]), # wall on the bottom
 ]
 addBox(glass_globe_scene, [-10, -10], [10, 10], ior=0.0)
-addCircle(glass_globe_scene, [0, 3], [3, 6], faceOutside=True, ior=1.5, numSegments=256)
+addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegments=256)
 
 # SET SCENE ---------------------------------------------- #
 planes = glass_globe_scene

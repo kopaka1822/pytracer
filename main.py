@@ -21,7 +21,7 @@ C1 = np.array([-8.55, 4.5])
 #C1_angle = -46.8  # in degrees
 C1_angle = 0.0
 max_bounces = 1
-draw_differentials = True
+draw_differentials = False
 draw_guess = True
 draw_normals = False
 iterations = 1
@@ -38,10 +38,14 @@ EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
 
 # labels
 LABEL_RAY = "original"
-LABEL_RAY2 = "guess"
+LABEL_RAY2 = "initial guess"
 LABEL_RAY2_DIFF = "differential"
-LABEL_RAY2_PRED = "predicted"
+LABEL_RAY2_PRED = "best iteration" # predicted path
 LABEL_RAY2_ITERATION = "last iteration"
+
+def get_max_path_length(hits):
+    if force_path_length: return len(hits)
+    return len(hits) + EXTRA_BOUNCES
 
 # ---------------------------------------------------------------
 # Draw functions
@@ -52,7 +56,7 @@ def draw_scene():
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
     ax.set_aspect('equal')
-    ax.set_title("Ray Differential Motion Vector")
+    ax.set_title(f"{max(1, iterations)} iteration{'s' if iterations > 1 else ''} with {predict_strategies[predict_strategy]}")
     ax.grid(True, linestyle="--", alpha=0.3)
 
     # Draw finite planes
@@ -235,36 +239,39 @@ def doRealIterations(C0, dir, newDir, hits):
         lastNumSteps = 0
 
         # trace similar number of bounces as original ray
-        for iHit in range(len(hits) + EXTRA_BOUNCES):
+        for iHit in range(get_max_path_length(hits)):
             phit = ray2.calcHit(PPlane, forceIntersect=True)
             hit = closestIntersect(ray2, prevPlane)
 
+            diff = float('inf') # set error to infinity
+            PStar = phit.P()
+
             # last hit or T>0 and front face hit
-            testPPlane = (phit.T() > 0) and (np.dot(N, ray2.D()) < 0)
+            if force_path_length:
+                if iHit == len(hits) - 1: # last hit
+                    diff = np.linalg.norm(P - PStar)
+            else: # variable path length:
+                testPPlane = (phit.T() > 0) and (np.dot(N, ray2.D()) < 0)
+                if testPPlane:
+                    diff = np.linalg.norm(P - PStar)**2
+                    if hit is not None:
+                        #diff += 10.0 * np.linalg.norm(PStar - hit.P())**2
+                        diff += max(0.0, np.dot(lastPlaneN, hit.P() - P))**2 # penalize if in front of geometric plane (but not on or behind)
+                    throughputPenalty = True
+                    if throughputPenalty:
+                        diff *= (1 + 0.1 * abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
+                        #diff += abs(len(hits) - (iHit + 1)) # larger errors if throughput / path length differs
 
-            if testPPlane:
-                PStar = phit.P()
-                diff = np.linalg.norm(P - PStar)**2
-                if hit is not None:
-                    #diff += 10.0 * np.linalg.norm(PStar - hit.P())**2
-                    diff += max(0.0, np.dot(lastPlaneN, hit.P() - P))**2 # penalize if in front of geometric plane (but not on or behind)
-                throughputPenalty = True
-                if throughputPenalty:
-                    diff *= (1 + 0.1 * abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
-                    #diff += abs(len(hits) - (iHit + 1)) # larger errors if throughput / path length differs
-
-                if diff < lastBestDiff: # for logging
-                    lastBestDiff = diff
-                    lastNumSteps = iHit + 1
-
-                if diff < bestDiff:
-                    bestDiff = diff
-                    bestDir = initial_dir.copy()
-
-                    # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
-                    dP = ray2.transfer(phit).dP()
-                    nextS = solveLinearEq(dP, P - PStar)
-                    foundBetter = True
+            if diff < lastBestDiff: # for logging
+                lastBestDiff = diff
+                lastNumSteps = iHit + 1
+            if diff < bestDiff:
+                bestDiff = diff
+                bestDir = initial_dir.copy()
+                # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
+                dP = ray2.transfer(phit).dP()
+                nextS = solveLinearEq(dP, P - PStar)
+                foundBetter = True
 
             if hit is None:
                 break # finished with this iteration
@@ -390,35 +397,41 @@ def doReverseRealIterations(C0, dir, newDir, hits, initialDir0 = None):
         lastNumSteps = 0
 
         # trace similar number of bounces as original ray
-        for iHit in range(len(hits) + EXTRA_BOUNCES):
+        for iHit in range(get_max_path_length(hits)):
             chit = ray2.calcHit(CPlane, forceIntersect=True)
             hit = closestIntersect(ray2, prevPlane)
 
-            # last hit or T>0 and front face hit
-            testCPlane = (chit.T() > 0) and (np.dot(CPlane.N(), ray2.D()) < 0)
+            CStar = chit.P()
+            diff = float('inf') # set error to infinity
 
-            if testCPlane:
-                CStar = chit.P()
-                diff = np.linalg.norm(C0 - CStar)**2
-                if hit is not None: # TODO penalie this even more, since we shouldnt hit anything before hitting the camera
-                    diff += max(0.0, np.dot(CPlane.N(), hit.P() - C0))**2 # penalize if in front of camera plane (but not on or behind)
-                throughputPenalty = True
-                if throughputPenalty:
-                    diff *= (1 + 0.1 * abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
+            if force_path_length:
+                if iHit == len(hits) - 1: # last hit
+                    CStar = chit.P()
+                    diff = np.linalg.norm(C0 - CStar)
+            else: # variable path length:
+                # last hit or T>0 and front face hit
+                testCPlane = (chit.T() > 0) and (np.dot(CPlane.N(), ray2.D()) < 0)
+                if testCPlane:
+                    diff = np.linalg.norm(C0 - CStar)**2
+                    if hit is not None: # TODO penalize this even more, since we shouldnt hit anything before hitting the camera
+                        diff += max(0.0, np.dot(CPlane.N(), hit.P() - C0))**2 # penalize if in front of camera plane (but not on or behind)
+                    throughputPenalty = True
+                    if throughputPenalty:
+                        diff *= (1 + 0.1 * abs(len(hits) - (iHit + 1))) # larger errors if throughput / path length differs
 
-                if diff < lastBestDiff: # for logging
-                    lastBestDiff = diff
-                    lastNumSteps = iHit + 1
+            if diff < lastBestDiff: # for logging
+                lastBestDiff = diff
+                lastNumSteps = iHit + 1
 
-                if diff < bestDiff:
-                    bestDiff = diff
-                    bestDir0 = initial_dir.copy()
-                    bestDirN = -ray2.D().copy()
+            if diff < bestDiff:
+                bestDiff = diff
+                bestDir0 = initial_dir.copy()
+                bestDirN = -ray2.D().copy()
 
-                    # calc current solution for ray2 differential (CStar + s * dP = P <=> s * dP = P - CStar)
-                    dC = ray2.transfer(chit).dP()
-                    nextS = solveLinearEq(dC, C0 - CStar)
-                    foundBetter = True
+                # calc current solution for ray2 differential (CStar + s * dP = P <=> s * dP = P - CStar)
+                dC = ray2.transfer(chit).dP()
+                nextS = solveLinearEq(dC, C0 - CStar)
+                foundBetter = True
 
             if hit is None:
                 break # finished with this iteration
@@ -840,7 +853,7 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED, 
     index = 0
 
     # draw actual ray2 path
-    for _ in range(len(hits) + EXTRA_BOUNCES):
+    for _ in range(get_max_path_length(hits)):
         hit = closestIntersect(ray2, prevPlane)
         if hit is None:
             break
@@ -860,7 +873,10 @@ def trace_and_draw_actual(C0, dir, hits, color='orange', label=LABEL_RAY2_PRED, 
         if ray2 is None:
             break # refraction not possible
 
-    draw_prediction(C0, dir, newHits[:index+1], color, label)
+    if force_path_length: # draw full path
+        draw_prediction(C0, dir, newHits, color, label)
+    else: # draw path up to lowest error
+        draw_prediction(C0, dir, newHits[:index+1], color, label)
 
 # ---------------------------------------------------------------
 # Reflect and Shear methods
