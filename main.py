@@ -42,11 +42,12 @@ EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
 rng_seed = 0
 
 # labels
-LABEL_RAY = "original"
-LABEL_RAY2 = "initial guess"
+LABEL_RAY = "C1 ray"
+LABEL_RAY2 = "guess"
 LABEL_RAY2_DIFF = "differential"
-LABEL_RAY2_PRED = "best iteration" # predicted path
+LABEL_RAY2_PRED = "C0 ray" # predicted path
 LABEL_RAY2_ITERATION = "last iteration"
+LABEL_P_STAR = "Pm"
 
 def get_max_path_length(hits):
     if force_path_length: return len(hits)
@@ -173,7 +174,7 @@ def methodRayDiff(C0, dir, hits, sampler):
     # draw P* and differentials
     if draw_guess:
         ax.plot(ray2.P()[0], ray2.P()[1], 'bo')
-        ax.text(ray2.P()[0]+0.2, ray2.P()[1]+0.2, "P*", color='b')
+        ax.text(ray2.P()[0]+0.2, ray2.P()[1]+0.2, LABEL_P_STAR, color='b')
         if draw_differentials and iterations == 0:
             dpend = ray2.P() + ray2.dP()
             ax.arrow(ray2.P()[0], ray2.P()[1], ray2.dP()[0], ray2.dP()[1], head_width=0.4, color='c', length_includes_head=True)
@@ -274,7 +275,7 @@ def doRealIterations(C0, dir, newDir, hits, sampler):
             if diff < lastBestDiff: # for logging
                 lastBestDiff = diff
                 lastNumSteps = iHit + 1
-            if diff < bestDiff:
+            if diff < bestDiff: 
                 bestDiff = diff
                 bestDir = initial_dir.copy()
                 # calc current solution for ray2 differential (PStar + s * dP = P <=> s * dP = P - PStar)
@@ -943,7 +944,7 @@ def methodRayLength(C0, C1, dir, hits, sampler):
         ax.plot([C0[0], end_point[0]], [C0[1], end_point[1]], 'b-', label=LABEL_RAY2)
         # print P* at end_point
         ax.plot(end_point[0], end_point[1], 'bo')
-        ax.text(end_point[0]+0.2, end_point[1]+0.2, "P*", color='b')
+        ax.text(end_point[0]+0.2, end_point[1]+0.2, LABEL_P_STAR, color='b')
 
     newDir = C1 + dir * rayLength - C0
     newDir /= np.linalg.norm(newDir)
@@ -989,7 +990,7 @@ def methodReflectAndShear(C0, dir, hits, sampler):
         ax.plot([C0[0], Pnew[0]], [C0[1], Pnew[1]], 'b-', label=LABEL_RAY2)
         # print P* at Pnew
         ax.plot(Pnew[0], Pnew[1], 'bo')
-        ax.text(Pnew[0]+0.2, Pnew[1]+0.2, "P*", color='b')
+        ax.text(Pnew[0]+0.2, Pnew[1]+0.2, LABEL_P_STAR, color='b')
 
     newDir = Pnew - C0
     newDir /= np.linalg.norm(newDir)
