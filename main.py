@@ -26,6 +26,7 @@ max_bounces = 10
 draw_differentials = False
 draw_guess = True
 draw_normals = False
+draw_halfway = True # for halfway reflect method
 iterations = 1
 iteration_strategies = ["Virtual iterations", "Real iterations", "Reverse real it."]
 iteration_strategy = 1  # index into iteration_strategies
@@ -972,6 +973,14 @@ def methodReflectAndShear(C0, dir, hits, sampler):
         ray = ray.transfer(hit).sampleNext(hit, sampler)
         R = ray.D() # outgoing direction
         H = (I + R) / np.linalg.norm(I + R)  # half-vector
+        if draw_guess and draw_halfway and hit.Plane().Ior() != 1.0:
+            # draw half-vector at hit point
+            ax.arrow(hit.P()[0], hit.P()[1], H[0], H[1], head_width=0.1, color='blue', length_includes_head=True, label=None)
+            ax.text(hit.P()[0]+H[0]+0.2, hit.P()[1]+H[1]+np.sign(H[1]) * 0.2, "h", color='blue')
+            # draw gray perpendicular line at hit point
+            perp = np.array([-H[1], H[0]]) * 3.0
+            ax.plot([hit.P()[0] - perp[0], hit.P()[0] + perp[0]], [hit.P()[1] - perp[1], hit.P()[1] + perp[1]], 'gray', linestyle='--', label=None)
+
         refraction = hit.Plane().Ior() != 1.0
         if useShear and refraction:
             # compute shear factor s
