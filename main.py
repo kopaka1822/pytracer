@@ -31,10 +31,11 @@ iterations = 1
 iteration_strategies = ["Virtual iterations", "Real iterations", "Reverse real it."]
 iteration_strategy = 1  # index into iteration_strategies
 predict_strategies = ["ray diff", "reverse ray diff", "manifold explore", "halfway reflect"]
-predict_strategy = 0  # index into predict_strategies
+predict_strategy = 3  # index into predict_strategies
 useSpeed = False
 useShear = False
-draw_last_iteration = True
+stopAtFirstRefraction = False # stops halfway reflect at first refraction (since those are biased)
+draw_last_iteration = False
 force_path_length = False # forces same path length for both camera paths
 monte_carlo = False # use monte carlo sampling for refraction/reflection decisions
 EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
@@ -128,7 +129,7 @@ def draw_scene():
         newDir = methodManifoldExplore(C0, C1, dir, hits, sampler.copy())
         #newDir = methodRayLength(C0, C1, dir, hits)
     if predict_strategy == 3:
-        newDir = methodReflectAndShear(C0, dir, hits, sampler.copy())
+        newDir = methodHalfwayReflect(C0, dir, hits, sampler.copy())
     
     #if iteration_strategy == 1:
     # always draw actual path
@@ -963,17 +964,24 @@ def methodRayLength(C0, C1, dir, hits, sampler):
 def mul(A, B):
     return np.matmul(A, B)
 
-def methodReflectAndShear(C0, dir, hits, sampler):
+def methodHalfwayReflect(C0, dir, hits, sampler):
     # initialize viewTransform with a 3x3 identity matrix
     viewTransform = np.identity(3)
     ray = Ray(C1, dir) # only used for tracking direction
+    P = None
     for hit in hits[:-1]:
         I = -ray.D() # incomming direction
         eta = ray.eta(hit)
         ray = ray.transfer(hit).sampleNext(hit, sampler)
         R = ray.D() # outgoing direction
         H = (I + R) / np.linalg.norm(I + R)  # half-vector
-        if draw_guess and draw_halfway and hit.Plane().Ior() != 1.0:
+        refraction = hit.Plane().Ior() != 1.0
+        
+        if stopAtFirstRefraction and refraction:
+            P = hit.P()
+            break
+
+        if draw_guess and draw_halfway and refraction:
             # draw half-vector at hit point
             ax.arrow(hit.P()[0], hit.P()[1], H[0], H[1], head_width=0.1, color='blue', length_includes_head=True, label=None)
             ax.text(hit.P()[0]+H[0]+0.2, hit.P()[1]+H[1]+np.sign(H[1]) * 0.2, "h", color='blue')
@@ -981,7 +989,6 @@ def methodReflectAndShear(C0, dir, hits, sampler):
             perp = np.array([-H[1], H[0]]) * 3.0
             ax.plot([hit.P()[0] - perp[0], hit.P()[0] + perp[0]], [hit.P()[1] - perp[1], hit.P()[1] + perp[1]], 'gray', linestyle='--', label=None)
 
-        refraction = hit.Plane().Ior() != 1.0
         if useShear and refraction:
             # compute shear factor s
             cosalpha = abs(np.dot(I, hit.Plane().N()))
@@ -992,7 +999,8 @@ def methodReflectAndShear(C0, dir, hits, sampler):
         else:
             viewTransform = mul(viewTransform, matrixMirror(hit.P(), H))
 
-    P = hits[-1].P()
+    if P is None: P = hits[-1].P()
+    
     Pnew = mul(viewTransform, np.array([P[0], P[1], 1.0]))[:2]
 
     if draw_guess:
@@ -1036,12 +1044,13 @@ ax_sliders = [
     fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Differential Scale
     fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # 10 Draw Normals
     fig.add_axes([0.75, 0.51, 0.2, 0.03]),  # 11 Iterations
-    fig.add_axes([0.75, 0.36, 0.2, 0.12]),  # 12 Predict strategy (radio)
-    fig.add_axes([0.75, 0.22, 0.2, 0.12]),  # 13 Iteration strategy (radio)
-    fig.add_axes([0.75, 0.16, 0.2, 0.03]),  # 14 Use N. Diff
-    fig.add_axes([0.75, 0.12, 0.2, 0.03]),  # 15 Force Path Length
-    fig.add_axes([0.75, 0.08, 0.2, 0.03]),  # 16 Monte Carlo
-    fig.add_axes([0.75, 0.04, 0.2, 0.03]),  # 17 RNG Seed
+    fig.add_axes([0.75, 0.38, 0.2, 0.12]),  # 12 Predict strategy (radio)
+    fig.add_axes([0.75, 0.26, 0.2, 0.12]),  # 13 Iteration strategy (radio)
+    fig.add_axes([0.75, 0.20, 0.2, 0.03]),  # 14 Stop at first refraction
+    fig.add_axes([0.75, 0.16, 0.2, 0.03]),  # 15 Use N. Diff
+    fig.add_axes([0.75, 0.12, 0.2, 0.03]),  # 16 Force Path Length
+    fig.add_axes([0.75, 0.08, 0.2, 0.03]),  # 17 Monte Carlo
+    fig.add_axes([0.75, 0.04, 0.2, 0.03]),  # 18 RNG Seed
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -1067,19 +1076,20 @@ radio_predict_strategy = RadioButtons(ax_sliders[12], predict_strategies, active
 radio_iteration_strategy = RadioButtons(ax_sliders[13], iteration_strategies, active=iteration_strategy)
 
 # remaining toggles
-checkbox_use_n_differentials = CheckButtons(ax_sliders[14], ["Use N Diff."], [Ray.use_normal_differential])
-checkbox_force_path_length = CheckButtons(ax_sliders[15], ["Force Path Length"], [force_path_length])
-checkbox_monte_carlo = CheckButtons(ax_sliders[16], ["Monte Carlo refr."], [monte_carlo])
+checkbox_stop_at_first_refraction = CheckButtons(ax_sliders[14], ["Stop at Refraction"], [stopAtFirstRefraction])
+checkbox_use_n_differentials = CheckButtons(ax_sliders[15], ["Use N Diff."], [Ray.use_normal_differential])
+checkbox_force_path_length = CheckButtons(ax_sliders[16], ["Force Path Length"], [force_path_length])
+checkbox_monte_carlo = CheckButtons(ax_sliders[17], ["Monte Carlo refr."], [monte_carlo])
 
 # RNG seed slider (0..1)
-slider_rng_seed = Slider(ax_sliders[17], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
+slider_rng_seed = Slider(ax_sliders[18], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration, rng_seed
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration, rng_seed, stopAtFirstRefraction
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -1094,6 +1104,7 @@ def update(val):
     iterations = int(slider_iterations.val)
     predict_strategy = predict_strategies.index(radio_predict_strategy.value_selected)
     iteration_strategy = iteration_strategies.index(radio_iteration_strategy.value_selected)
+    stopAtFirstRefraction = checkbox_stop_at_first_refraction.get_status()[0]
     Ray.use_normal_differential = checkbox_use_n_differentials.get_status()[0]
     force_path_length = checkbox_force_path_length.get_status()[0]
     monte_carlo = checkbox_monte_carlo.get_status()[0]
@@ -1104,7 +1115,7 @@ def update(val):
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_iterations, slider_rng_seed]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, radio_iteration_strategy, radio_predict_strategy, checkbox_force_path_length, checkbox_monte_carlo, checkbox_draw_last_iteration, checkbox_use_n_differentials]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, radio_iteration_strategy, radio_predict_strategy, checkbox_force_path_length, checkbox_monte_carlo, checkbox_draw_last_iteration, checkbox_use_n_differentials, checkbox_stop_at_first_refraction]:
     c.on_clicked(update)
 
 # Initial draw
