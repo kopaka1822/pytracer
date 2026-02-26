@@ -8,6 +8,13 @@ from scenes import *
 from sampler import *
 import random
 
+# Configure matplotlib to use LaTeX rendering
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern Roman"],
+})
+
 # solves A * s = B for scalar s
 def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
     if abs(A[0]) > abs(A[1]):
@@ -44,12 +51,15 @@ EXTRA_BOUNCES = 4 # allowed number of extra bounces during real iterations
 rng_seed = 0
 
 # labels
-LABEL_RAY = "C1 ray"
+LABEL_RAY = "$C$ ray"
 LABEL_RAY2 = "guess"
 LABEL_RAY2_DIFF = "differential"
-LABEL_RAY2_PRED = "C0 ray" # predicted path
+LABEL_RAY2_PRED = "$C^p$ ray" # predicted path
 LABEL_RAY2_ITERATION = "last iteration"
-LABEL_P_STAR = "Pm"
+LABEL_P = "$P$"
+LABEL_P_STAR = "$P_m$"
+LABEL_C1 = "$C$"
+LABEL_C0 = "$C^p$"
 
 def get_max_path_length(hits):
     if force_path_length: return len(hits)
@@ -80,9 +90,9 @@ def draw_scene():
 
     # Draw cameras
     ax.plot(C0[0], C0[1], 'bo')
-    ax.text(C0[0]-0.4, C0[1]+0.2, "C0", color='b')
+    ax.text(C0[0]-0.4, C0[1]+0.2, LABEL_C0, color='b')
     ax.plot(C1[0], C1[1], 'go')
-    ax.text(C1[0]-0.4, C1[1]+0.2, "C1", color='g')
+    ax.text(C1[0]-0.4, C1[1]+0.2, LABEL_C1, color='g')
 
     # Draw C1 ray direction
     dir_len = 1.5
@@ -119,7 +129,7 @@ def draw_scene():
 
     # draw point P
     ax.plot(lastP[0], lastP[1], 'go')
-    ax.text(lastP[0]+0.2, lastP[1]+0.2, "P", color='g')
+    ax.text(lastP[0]+0.2, lastP[1]+0.2, LABEL_P, color='g')
 
     if predict_strategy == 0:
         newDir = methodRayDiff(C0, dir, hits, sampler.copy())
