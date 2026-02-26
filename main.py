@@ -27,13 +27,23 @@ def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
 # Camera positions (modifiable via sliders)
 C0 = np.array([-9.9, 2.15])
 C1 = np.array([-8.55, 4.5])
+C1_angle = 0.0
+max_bounces = 10
 # scene specific overwrites
 if planes is reflection_scene3:
     C0 = np.array([-5.4, 2.0])
     C1 = np.array([-5.4, 3.5])
+    max_bounces = 3
+if planes is glass_scene:
+    C1 = np.array([-7.5, 5.0])
+    C0 = np.array([-7.5, 3.7])
+if planes is glass_globe_scene:
+    C1 = np.array([-6.4, 2.4])
+    C0 = np.array([-7.2, 1.8])
+    C1_angle = -10.8
+
 #C1_angle = -46.8  # in degrees
-C1_angle = 0.0
-max_bounces = 10
+
 draw_differentials = False
 draw_guess = True
 draw_normals = False
@@ -65,6 +75,7 @@ LABEL_P_OFFSET = 0.2 # xoffset
 LABEL_P_STAR = "$P_m$"
 LABEL_C1 = "$C$"
 LABEL_C0 = "$C^p$"
+LABEL_HALFWAY = "$\hat{h}$"
 
 def get_max_path_length(hits):
     if force_path_length: return len(hits)
@@ -999,7 +1010,7 @@ def methodHalfwayReflect(C0, dir, hits, sampler):
         if draw_guess and draw_halfway and refraction:
             # draw half-vector at hit point
             ax.arrow(hit.P()[0], hit.P()[1], H[0], H[1], head_width=0.1, color='blue', length_includes_head=True, label=None)
-            ax.text(hit.P()[0]+H[0]+0.2, hit.P()[1]+H[1]+np.sign(H[1]) * 0.2, "h", color='blue')
+            ax.text(hit.P()[0]+H[0]+0.2, hit.P()[1]+H[1]+np.sign(H[1]) * 0.2, LABEL_HALFWAY, color='blue')
             # draw gray perpendicular line at hit point
             perp = np.array([-H[1], H[0]]) * 3.0
             ax.plot([hit.P()[0] - perp[0], hit.P()[0] + perp[0]], [hit.P()[1] - perp[1], hit.P()[1] + perp[1]], 'gray', linestyle='--', label=None)
