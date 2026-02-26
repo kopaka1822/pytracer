@@ -27,6 +27,10 @@ def solveLinearEq(A: np.ndarray, B: np.ndarray) -> float:
 # Camera positions (modifiable via sliders)
 C0 = np.array([-9.9, 2.15])
 C1 = np.array([-8.55, 4.5])
+# scene specific overwrites
+if planes is reflection_scene3:
+    C0 = np.array([-5.4, 2.0])
+    C1 = np.array([-5.4, 3.5])
 #C1_angle = -46.8  # in degrees
 C1_angle = 0.0
 max_bounces = 10
@@ -57,6 +61,7 @@ LABEL_RAY2_DIFF = "differential"
 LABEL_RAY2_PRED = "$C^p$ ray" # predicted path
 LABEL_RAY2_ITERATION = "last iteration"
 LABEL_P = "$P$"
+LABEL_P_OFFSET = 0.2 # xoffset 
 LABEL_P_STAR = "$P_m$"
 LABEL_C1 = "$C$"
 LABEL_C0 = "$C^p$"
@@ -129,7 +134,7 @@ def draw_scene():
 
     # draw point P
     ax.plot(lastP[0], lastP[1], 'go')
-    ax.text(lastP[0]+0.2, lastP[1]+0.2, LABEL_P, color='g')
+    ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='g')
 
     if predict_strategy == 0:
         newDir = methodRayDiff(C0, dir, hits, sampler.copy())
@@ -1014,7 +1019,11 @@ def methodHalfwayReflect(C0, dir, hits, sampler):
     Pnew = mul(viewTransform, np.array([P[0], P[1], 1.0]))[:2]
 
     if draw_guess:
+        # line from C0 to Pnew
         ax.plot([C0[0], Pnew[0]], [C0[1], Pnew[1]], 'b-', label=LABEL_RAY2)
+        # line from hit[1] to Pnew (dashed)
+        if(len(hits) > 1):
+            ax.plot([hits[0].P()[0], Pnew[0]], [hits[0].P()[1], Pnew[1]], 'b--', label=None)
         # print P* at Pnew
         ax.plot(Pnew[0], Pnew[1], 'bo')
         ax.text(Pnew[0]+0.2, Pnew[1]+0.2, LABEL_P_STAR, color='b')

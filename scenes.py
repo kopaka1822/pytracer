@@ -54,6 +54,13 @@ reflection_scene2 = [
 ]
 addBox(reflection_scene2, [-10, -10], [10, 10])
 
+reflection_scene3 = [
+    Plane([-5, 0], [0, 5]),
+    Plane([-5, 5], [0, 10]),
+    Plane([2.5, 10], [2.5, 5]),
+    Plane([2.5, 5], [0, 5]),
+]
+
 refraction_scene = [
 
     # two planes in center for glass
@@ -89,7 +96,7 @@ addBox(glass_globe_scene, [-10, -10], [10, 10], ior=0.0)
 addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegments=256)
 
 # SET SCENE ---------------------------------------------- #
-planes = glass_scene
+planes = reflection_scene3
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
     closest_hit = None
