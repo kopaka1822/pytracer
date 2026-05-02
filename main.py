@@ -18,18 +18,18 @@ import random
 
 # Camera positions (modifiable via sliders)
 L1 = np.array([-8.2, 5.0])
-C1 = np.array([-8.55, 4.5])
-C1_angle = 0.0
+C1 = np.array([-6.8, 0.8])
+C1_angle = -14.4
 max_bounces = 10
 # scene specific overwrites
-if planes is reflection_scene3:
-    C1 = np.array([-5.4, 3.5])
-    max_bounces = 3
-if planes is glass_scene:
-    C1 = np.array([-7.5, 5.0])
-if planes is glass_globe_scene:
-    C1 = np.array([-6.4, 2.4])
-    C1_angle = -10.8
+# if planes is reflection_scene3:
+#     C1 = np.array([-5.4, 3.5])
+#     max_bounces = 3
+# if planes is glass_scene:
+#     C1 = np.array([-7.5, 5.0])
+# if planes is glass_globe_scene:
+#     C1 = np.array([-6.4, 2.4])
+#     C1_angle = -10.8
 
 draw_differentials = True
 draw_guess = True
@@ -77,9 +77,9 @@ def draw_scene():
     # Draw cameras
     ax.plot(C1[0], C1[1], 'go')
     ax.text(C1[0]-0.4, C1[1]+0.2, LABEL_C1, color='g')
-    # draw light
-    ax.plot(L1[0], L1[1], 'ro')
-    ax.text(L1[0]-0.4, L1[1]+0.2, LABEL_L1, color='r')
+    # draw light (black)
+    ax.plot(L1[0], L1[1], marker='o', color='black')
+    ax.text(L1[0]-0.4, L1[1]+0.2, LABEL_L1, color='black')
 
     # Draw C1 ray direction
     dir_len = 1.5
@@ -114,8 +114,10 @@ def draw_scene():
             ax.plot([prevDiffP[0], curDiffP[0]], [prevDiffP[1], curDiffP[1]], 'b--', label=LABEL_RAY_DIFF if i == 0 else None)
 
         lastP = ray.P()
+        lastRay = ray
         ray = ray.sampleNext(hit, sampler)
         if ray is None:
+            ray = lastRay
             break  # refraction not possible
         prevPlane = hit.Plane()
 
@@ -123,11 +125,63 @@ def draw_scene():
     ax.plot(lastP[0], lastP[1], 'go')
     ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='g')
 
-    # draw direct connection from P to L1
-    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], 'r-', label="Direct Connection")
+    # draw direct connection from P to L1 (orange)
+    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
     
+    # get direct hits from P to L1 and plot them
+    hits = getDirectHits(lastP, L1, prevPlane)
+    for hit in hits:
+        # plot points for each hit (unlabeled) in orange
+        ax.plot(hit.P()[0], hit.P()[1], marker='o', color='orange')
+
+    if selected_method == 0:
+        methodPointToLight(lastP, L1, hits, ray)
+
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
+
+# ----------------------------------------------------------------
+# Shadow Methods
+# ----------------------------------------------------------------
+
+def getDirectHits(P, L, prevPlane):
+    '''Returns the list of hits along the straight ray from P to L, without P'''
+
+    ray = Ray(P, L - P)
+    hits = []
+    tmin = 0.0
+    tmax = np.linalg.norm(L - P)
+    while True:
+        hit = closestIntersect(ray, prevPlane, tmin, tmax)
+        if hit is None:
+            break
+        hits.append(hit)
+        prevPlane = hit.Plane()
+        tmin = hit.T()
+        
+    return hits
+
+def computeDDforLight(P, L, dPdx):
+    """
+    Compute the differential of the normalized direction (L-P)/|L-P|
+    with respect to a differential of P (dPdx).
+    """
+    d = L - P
+    dd = np.dot(d, d)
+    dddx = -dPdx
+    return (dd * dddx - np.dot(d, dddx) * d) / (dd ** 1.5)
+
+def methodPointToLight(P, L, hits, rayIn):
+    ray = Ray(P, L - P, rayIn.dP(), computeDDforLight(P, L, rayIn.dP()))
+
+    rayRef = ray.transfer2(L, -ray.D(), np.linalg.norm(L - P))
+    # draw reference ray differential
+    if draw_differentials:
+        refStart = rayIn.P() + rayIn.dP()
+        refEnd = rayRef.P() + rayRef.dP()
+        ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=None)
+
+
 
 # ---------------------------------------------------------------
 # Manifold Exploration Method

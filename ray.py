@@ -67,10 +67,13 @@ class Ray:
 
         return Hit(plane, hit_point, t)
 
+    def transfer2(self, P: np.ndarray, N: np.ndarray, t: float) -> "Ray":
+        dt = - np.dot(self._dP + t * self._dD, N) / np.dot(self._D, N)
+        dPNew = self._dP + t * self._dD + dt * self._D
+        return Ray(P, self._D, dPNew, self._dD)
+
     def transfer(self, hit: Hit) -> "Ray":
-        dt = - np.dot(self._dP + hit.T() * self._dD, hit.Plane().N()) / np.dot(self._D, hit.Plane().N())
-        dPNew = self._dP + hit.T() * self._dD + dt * self._D
-        return Ray(hit.P(), self._D, dPNew, self._dD)
+        return self.transfer2(hit.P(), hit.Plane().N(), hit.T())
 
     def reflect(self, hit: Hit) -> "Ray":
         N = hit.ShadingN()

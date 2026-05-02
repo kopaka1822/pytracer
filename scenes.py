@@ -98,7 +98,7 @@ addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegme
 # SET SCENE ---------------------------------------------- #
 planes = glass_globe_scene
 
-def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
+def closestIntersect(ray: Ray, prevPlane: Plane | None = None, TMin: float = 0.0, TMax: float = float('inf')) -> Hit | None:
     closest_hit = None
     min_t = float('inf')
 
@@ -106,7 +106,7 @@ def closestIntersect(ray: Ray, prevPlane: Plane | None = None) -> Hit | None:
         if pl is prevPlane:
             continue
         hit = ray.calcHit(pl)
-        if hit is not None and hit.T() < min_t:
+        if hit is not None and TMin < hit.T() < TMax and hit.T() < min_t:
             min_t = hit.T()
             closest_hit = hit
 
