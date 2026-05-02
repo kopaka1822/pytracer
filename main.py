@@ -25,8 +25,10 @@ max_bounces = 10
 # if planes is reflection_scene3:
 #     C1 = np.array([-5.4, 3.5])
 #     max_bounces = 3
-# if planes is glass_scene:
-#     C1 = np.array([-7.5, 5.0])
+if planes is glass_scene:
+     C1 = np.array([-6.8, -5.33])
+     C1_angle = 8.4
+     L = np.array([-8.2, 5.0])
 # if planes is glass_globe_scene:
 #     C1 = np.array([-6.4, 2.4])
 #     C1_angle = -10.8
@@ -138,7 +140,8 @@ def draw_scene():
         methodLightToPoint(lastP, L1, hits, ray, phit)
 
     # draw direct connection from P to L1 (orange)
-    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
+    if draw_guess:
+        ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
@@ -179,7 +182,7 @@ def methodPointToLight(P, L, hits, rayIn):
 
     rayRef = ray.transfer2(L, -ray.D(), np.linalg.norm(L - P))
     # draw reference ray differential
-    if draw_differentials:
+    if draw_differentials and draw_guess:
         refStart = rayIn.P() + rayIn.dP()
         refEnd = rayRef.P() + rayRef.dP()
         ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=None)
@@ -242,7 +245,7 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
     rayRef = rayRef.transfer2(P, phit.Plane().N(), np.linalg.norm(P - L))
 
     # draw reference ray differential
-    if draw_differentials:
+    if draw_differentials and draw_guess:
         refStart = L
         refEnd = rayRef.P() + rayRef.dP()
         ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=None)
