@@ -321,27 +321,23 @@ fig = plt.figure(figsize=(10, 6))
 fig.canvas.manager.set_window_title('Pytracer')
 ax = fig.add_axes([0.07, 0.1, 0.6, 0.8])  # main plot area (left)
 
-# Slider panel
+# Slider & control panel (pruned to used widgets)
+# Layout: stacked controls on the right side
 ax_sliders = [
     fig.add_axes([0.75, 0.95, 0.2, 0.03]),  # 0 C1.x
     fig.add_axes([0.75, 0.91, 0.2, 0.03]),  # 1 C1.y
     fig.add_axes([0.75, 0.87, 0.2, 0.03]),  # 2 C1.angle
-    fig.add_axes([0.75, 0.83, 0.2, 0.03]),  # 3 C0.x
-    fig.add_axes([0.75, 0.79, 0.2, 0.03]),  # 4 C0.y
+    fig.add_axes([0.75, 0.83, 0.2, 0.03]),  # 3 L1.x
+    fig.add_axes([0.75, 0.79, 0.2, 0.03]),  # 4 L1.y
     fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # 5 Max Bounces
-    fig.add_axes([0.75, 0.71, 0.2, 0.03]),  # 6 Draw Guess
-    fig.add_axes([0.75, 0.67, 0.2, 0.03]),  # 7 Draw Last Iteration
-    fig.add_axes([0.75, 0.63, 0.2, 0.03]),  # 8 Draw Differentials
-    fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Differential Scale
-    fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # 10 Draw Normals
-    fig.add_axes([0.75, 0.51, 0.2, 0.03]),  # 11 Iterations
-    fig.add_axes([0.75, 0.38, 0.2, 0.12]),  # 12 Predict strategy (radio)
-    fig.add_axes([0.75, 0.26, 0.2, 0.12]),  # 13 Iteration strategy (radio)
-    fig.add_axes([0.75, 0.20, 0.2, 0.03]),  # 14 Stop at first refraction
-    fig.add_axes([0.75, 0.16, 0.2, 0.03]),  # 15 Use N. Diff
-    fig.add_axes([0.75, 0.12, 0.2, 0.03]),  # 16 Force Path Length
-    fig.add_axes([0.75, 0.08, 0.2, 0.03]),  # 17 Monte Carlo
-    fig.add_axes([0.75, 0.04, 0.2, 0.03]),  # 18 RNG Seed
+    fig.add_axes([0.75, 0.71, 0.2, 0.03]),  # 6 Draw Guess (checkbox)
+    fig.add_axes([0.75, 0.67, 0.2, 0.03]),  # 7 Draw Differentials (checkbox)
+    fig.add_axes([0.75, 0.63, 0.2, 0.03]),  # 8 Differential Scale (slider)
+    fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Draw Normals (checkbox)
+    fig.add_axes([0.75, 0.48, 0.2, 0.08]),  # 10 Method (radio) - moved slightly down
+    fig.add_axes([0.75, 0.42, 0.2, 0.03]),  # 11 Use N. Diff (checkbox)
+    fig.add_axes([0.75, 0.38, 0.2, 0.03]),  # 12 Monte Carlo (checkbox)
+    fig.add_axes([0.75, 0.34, 0.2, 0.03]),  # 13 RNG Seed (slider)
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -352,31 +348,32 @@ slider_C0y = Slider(ax_sliders[4], "L1.y", -10.0, 10.0, valinit=L1[1])
 # integer slider for max bounces
 slider_max_bounces = Slider(ax_sliders[5], "Max Bounces", 1, 10, valinit=max_bounces, valstep=1)
 
-# checkboxes
+# checkboxes (in ascending axis order)
 checkbox_draw_guess = CheckButtons(ax_sliders[6], ["Draw Guess"], [draw_guess])
-checkbox_draw_differentials = CheckButtons(ax_sliders[8], ["Draw Differentials"], [draw_differentials])
+checkbox_draw_differentials = CheckButtons(ax_sliders[7], ["Draw Differentials"], [draw_differentials])
 
-# Radio buttons for selecting method (integrated into slider panel)
-# use the existing axis reserved at index 12
-radio_methods = RadioButtons(ax_sliders[12], methods, active=selected_method)
+# differential scale
+slider_tangent_scale = Slider(ax_sliders[8], "Differential Scale", 0.001, 0.5, valinit=Ray.tangent_scale)
 
-# differential scale and normals and iterations
-slider_tangent_scale = Slider(ax_sliders[9], "Differential Scale", 0.001, 0.5, valinit=Ray.tangent_scale)
-checkbox_draw_normals = CheckButtons(ax_sliders[10], ["Draw Normals"], [draw_normals])
+# draw normals
+checkbox_draw_normals = CheckButtons(ax_sliders[9], ["Draw Normals"], [draw_normals])
 
-# remaining toggles
-checkbox_use_n_differentials = CheckButtons(ax_sliders[15], ["Use N Diff."], [Ray.use_normal_differential])
-checkbox_monte_carlo = CheckButtons(ax_sliders[17], ["Monte Carlo refr."], [monte_carlo])
+# method selection (radio)
+radio_methods = RadioButtons(ax_sliders[10], methods, active=selected_method)
 
-# RNG seed slider (0..1)
-slider_rng_seed = Slider(ax_sliders[18], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
+# other toggles
+checkbox_use_n_differentials = CheckButtons(ax_sliders[11], ["Use N Diff."], [Ray.use_normal_differential])
+checkbox_monte_carlo = CheckButtons(ax_sliders[12], ["Monte Carlo refr."], [monte_carlo])
+
+# RNG seed slider
+slider_rng_seed = Slider(ax_sliders[13], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration, rng_seed, stopAtFirstRefraction, selected_method
+    global C1, C1_angle, L1, max_bounces, draw_differentials, draw_guess, draw_normals, monte_carlo, rng_seed, selected_method
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
