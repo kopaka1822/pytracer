@@ -111,7 +111,7 @@ def draw_scene():
         ray = ray.transfer(hit)
         curDiffP = ray.P() + ray.dP()
         if draw_differentials:
-            ax.plot([prevDiffP[0], curDiffP[0]], [prevDiffP[1], curDiffP[1]], 'b--', label=LABEL_RAY_DIFF if i == 0 else None)
+            ax.plot([prevDiffP[0], curDiffP[0]], [prevDiffP[1], curDiffP[1]], 'g--', label=LABEL_RAY_DIFF if i == 0 else None)
 
         lastP = ray.P()
         lastRay = ray
@@ -124,9 +124,6 @@ def draw_scene():
     # draw point P
     ax.plot(lastP[0], lastP[1], 'go')
     ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='g')
-
-    # draw direct connection from P to L1 (orange)
-    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
     
     # get direct hits from P to L1 and plot them
     hits = getDirectHits(lastP, L1, prevPlane)
@@ -136,6 +133,10 @@ def draw_scene():
 
     if selected_method == 0:
         methodPointToLight(lastP, L1, hits, ray)
+
+
+    # draw direct connection from P to L1 (orange)
+    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
 
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
@@ -181,6 +182,54 @@ def methodPointToLight(P, L, hits, rayIn):
         refEnd = rayRef.P() + rayRef.dP()
         ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=None)
 
+    lastTMin = 0.0
+    rayDirIn = ray.D()
+    rayDirOut = ray.D()
+    for hit in hits:
+        eta = hit.Plane().Ior()
+        N = hit.ShadingN()
+        virtualT = hit.T() - lastTMin
+        # check if front face or back face hit
+        if np.dot(hit.Plane().N(), ray.D()) < 0:
+            # front face hit (enter medium)
+            eta = 1.0 / eta # flip ior
+            rayDirIn = ray.D()
+            rayDirOut = Ray._refract(ray.D(), N, eta) # always possible, eta < 1.0
+        else:
+            # back face hit (exit medium)
+            N = -N
+            rayDirOut = ray.D()
+            rayDirIn = Ray._refract(ray.D(), N, 1.0 / eta) # always possible, 1/eta < 1.0
+            virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
+        
+        # create ray for current ray model
+        startP = ray.P()
+        startdP = ray.P() + ray.dP()
+        ray = Ray(ray.P(), rayDirIn, ray.dP(), ray.dD())
+        ray = ray.transfer2(ray.P() + virtualT * rayDirIn, N, virtualT)
+        endP = ray.P()
+        enddP = ray.P() + ray.dP()
+
+        # draw ray model from startP to endP
+        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], 'm-', label=None)
+        if draw_differentials:
+            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], 'm--', label=None)
+
+        lastTMin = hit.T() # update tmin
+
+    # final connection to L
+    finalT = np.linalg.norm(L - P) - lastTMin
+
+    startP = ray.P()
+    startdP = ray.P() + ray.dP()
+    ray = Ray(ray.P(), rayDirOut, ray.dP(), ray.dD())
+    ray = ray.transfer2(ray.P() + finalT * rayDirOut, -rayDirOut, finalT)
+    endP = ray.P()
+    enddP = ray.P() + ray.dP()
+
+    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], 'm-', label="Ray Model")
+    if draw_differentials:
+        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], 'm--', label="Ray Model Diff")
 
 
 # ---------------------------------------------------------------

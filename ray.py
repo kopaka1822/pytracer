@@ -85,7 +85,8 @@ class Ray:
         dDNew = self._dD - 2 * (np.dot(D, N) * dN + dDN * N)
         return Ray(hit.P(), R, self._dP, dDNew)
 
-    def _refract(self, I, N, eta):
+    @staticmethod
+    def _refract(I, N, eta):
         if np.dot(I, N) > 0:
             N = -N
         cosi = -np.dot(N, I)   # >= 0
