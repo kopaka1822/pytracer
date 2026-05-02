@@ -17,7 +17,7 @@ import random
 
 
 # Camera positions (modifiable via sliders)
-L1 = np.array([-9.9, 2.15])
+L1 = np.array([-8.2, 5.0])
 C1 = np.array([-8.55, 4.5])
 C1_angle = 0.0
 max_bounces = 10
@@ -35,6 +35,9 @@ draw_differentials = True
 draw_guess = True
 draw_normals = False
 monte_carlo = False # use monte carlo sampling for refraction/reflection decisions
+methods = ["PointToLight", "LightToPoint"]
+# selected method for UI
+selected_method = 0
 
 # new RNG seed (0..1)
 rng_seed = 0
@@ -57,7 +60,7 @@ def draw_scene():
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
     ax.set_aspect('equal')
-    ax.set_title(f"Caustics")
+    ax.set_title(f"Caustics - {methods[selected_method]}")
     ax.grid(True, linestyle="--", alpha=0.3)
 
     # Draw finite planes
@@ -121,7 +124,7 @@ def draw_scene():
     ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='g')
 
     # draw direct connection from P to L1
-    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], 'r--', label="Direct Connection")
+    ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], 'r-', label="Direct Connection")
     
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
@@ -353,6 +356,10 @@ slider_max_bounces = Slider(ax_sliders[5], "Max Bounces", 1, 10, valinit=max_bou
 checkbox_draw_guess = CheckButtons(ax_sliders[6], ["Draw Guess"], [draw_guess])
 checkbox_draw_differentials = CheckButtons(ax_sliders[8], ["Draw Differentials"], [draw_differentials])
 
+# Radio buttons for selecting method (integrated into slider panel)
+# use the existing axis reserved at index 12
+radio_methods = RadioButtons(ax_sliders[12], methods, active=selected_method)
+
 # differential scale and normals and iterations
 slider_tangent_scale = Slider(ax_sliders[9], "Differential Scale", 0.001, 0.5, valinit=Ray.tangent_scale)
 checkbox_draw_normals = CheckButtons(ax_sliders[10], ["Draw Normals"], [draw_normals])
@@ -369,7 +376,7 @@ slider_rng_seed = Slider(ax_sliders[18], "RNG Seed", 0, 100, valinit=rng_seed, v
 # ---------------------------------------------------------------
 
 def update(val):
-    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration, rng_seed, stopAtFirstRefraction
+    global C0, C1, C1_angle, max_bounces, draw_differentials, draw_guess, draw_normals, iterations, iteration_strategy, predict_strategy, force_path_length, monte_carlo, draw_last_iteration, rng_seed, stopAtFirstRefraction, selected_method
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -383,13 +390,14 @@ def update(val):
     Ray.use_normal_differential = checkbox_use_n_differentials.get_status()[0]
     monte_carlo = checkbox_monte_carlo.get_status()[0]
     rng_seed = int(slider_rng_seed.val)
+    selected_method = methods.index(radio_methods.value_selected)
 
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_rng_seed]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, checkbox_monte_carlo, checkbox_use_n_differentials]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, checkbox_monte_carlo, checkbox_use_n_differentials, radio_methods]:
     c.on_clicked(update)
 
 # Initial draw
