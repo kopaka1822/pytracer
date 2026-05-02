@@ -75,8 +75,8 @@ def draw_scene():
                      head_width=0.2, color='r', length_includes_head=True)
 
     # Draw cameras
-    ax.plot(C1[0], C1[1], 'go')
-    ax.text(C1[0]-0.4, C1[1]+0.2, LABEL_C1, color='g')
+    ax.plot(C1[0], C1[1], marker='o', color='deepskyblue')
+    ax.text(C1[0]-0.4, C1[1]+0.2, LABEL_C1, color='deepskyblue')
     # draw light (black)
     ax.plot(L1[0], L1[1], marker='o', color='black')
     ax.text(L1[0]-0.4, L1[1]+0.2, LABEL_L1, color='black')
@@ -85,7 +85,7 @@ def draw_scene():
     dir_len = 1.5
     dir = np.array([np.cos(np.radians(C1_angle)), np.sin(np.radians(C1_angle))])
     ax.arrow(C1[0], C1[1], dir[0]*dir_len, dir[1]*dir_len,
-             head_width=0.2, color='g', length_includes_head=True)
+             head_width=0.2, color='deepskyblue', length_includes_head=True)
 
     prevPlane = None
     lastP = C1
@@ -104,14 +104,14 @@ def draw_scene():
         hits.append(hit)
 
         # Draw the ray to the hit point
-        ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-', label=LABEL_RAY if i == 0 else None)
+        ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], color='deepskyblue', linestyle='-', label=LABEL_RAY if i == 0 else None)
 
         # Transfer the ray to the hit point
         prevDiffP = ray.P() + ray.dP()
         ray = ray.transfer(hit)
         curDiffP = ray.P() + ray.dP()
         if draw_differentials:
-            ax.plot([prevDiffP[0], curDiffP[0]], [prevDiffP[1], curDiffP[1]], 'g--', label=LABEL_RAY_DIFF if i == 0 else None)
+            ax.plot([prevDiffP[0], curDiffP[0]], [prevDiffP[1], curDiffP[1]], color='deepskyblue', linestyle='--', label=LABEL_RAY_DIFF if i == 0 else None)
 
         lastP = ray.P()
         lastRay = ray
@@ -122,10 +122,11 @@ def draw_scene():
         prevPlane = hit.Plane()
 
     # draw point P
-    ax.plot(lastP[0], lastP[1], 'go')
-    ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='g')
+    ax.plot(lastP[0], lastP[1], marker='o', color='deepskyblue')
+    ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='deepskyblue')
     
     # get direct hits from P to L1 and plot them
+    phit = hits[-1]
     hits = getDirectHits(lastP, L1, prevPlane)
     for hit in hits:
         # plot points for each hit (unlabeled) in orange
@@ -134,7 +135,7 @@ def draw_scene():
     if selected_method == 0:
         methodPointToLight(lastP, L1, hits, ray)
     if selected_method == 1:
-        methodLightToPoint(lastP, L1, hits, ray)
+        methodLightToPoint(lastP, L1, hits, ray, phit)
 
     # draw direct connection from P to L1 (orange)
     ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
@@ -216,9 +217,9 @@ def methodPointToLight(P, L, hits, rayIn):
         ray = Ray(endP, ray.D(), ray.dP(), ray.dD())
 
         # draw ray model from startP to endP
-        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], 'm-', label=None)
+        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
         if draw_differentials:
-            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], 'm--', label=None)
+            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
 
         lastTMin = hit.T() # update tmin
 
@@ -232,13 +233,13 @@ def methodPointToLight(P, L, hits, rayIn):
     endP = ray.P()
     enddP = ray.P() + ray.dP()
 
-    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], 'm-', label="Ray Model")
+    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
     if draw_differentials:
-        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], 'm--', label="Ray Model Diff")
+        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
 
-def methodLightToPoint(P, L, hits, rayIn):
+def methodLightToPoint(P, L, hits, rayIn, phit):
     rayRef = Ray(L, P - L, None, -computeDDforLight(P, L, rayIn.dP()))
-    rayRef = rayRef.transfer2(P, -rayRef.D(), np.linalg.norm(L - P))
+    rayRef = rayRef.transfer2(P, phit.Plane().N(), np.linalg.norm(P - L))
 
     # draw reference ray differential
     if draw_differentials:
@@ -282,9 +283,9 @@ def methodLightToPoint(P, L, hits, rayIn):
         ray = Ray(endP, ray.D(), ray.dP(), ray.dD())
 
         # draw ray model from startP to endP
-        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], 'm-', label=None)
+        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
         if draw_differentials:
-            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], 'm--', label=None)
+            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
 
         lastTMin = maxT - hit.T() # update tmin
 
@@ -294,13 +295,13 @@ def methodLightToPoint(P, L, hits, rayIn):
     startP = ray.P()
     startdP = ray.P() + ray.dP()
     ray = Ray(ray.P(), rayDirOut, ray.dP(), ray.dD())
-    ray = ray.transfer2(ray.P() + finalT * rayDirOut, -rayDirOut, finalT)
+    ray = ray.transfer2(ray.P() + finalT * rayDirOut, phit.Plane().N(), finalT)
     endP = ray.P()
     enddP = ray.P() + ray.dP()
 
-    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], 'm-', label="Ray Model")
+    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
     if draw_differentials:
-        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], 'm--', label="Ray Model Diff")
+        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
 
 
 
@@ -420,7 +421,7 @@ def methodManifoldExplore(C0, C1, dir, hits, sampler):
         P1 = np.zeros(len(rhits) - 2) # = P2: dim: 1xn
         P1[0] = 1.0 # only extract the second vertex (which is the first entry in the A matrix)
         P1 = P1.reshape((1, len(rhits) - 2)) # dim: 1xn
-        # TODO this could be cached, only required if rhits changes
+        # TODO this could be cached, only requigreen if rhits changes
         Ainv, Bn = computeDerivatives(rhits) # Ainv: dim: nxn, Bn: dim: nx1
 
         # intermediate results
@@ -466,7 +467,7 @@ def methodManifoldExplore(C0, C1, dir, hits, sampler):
 
         foundBetter = False
         if len(rhitsnew) != len(rhits):
-            print(f"ME {i+1}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, reducing beta.")
+            print(f"ME {i+1}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, greenucing beta.")
         else:
             # check if error got smaller
             dpold = C0 - rhits[-1].P()
@@ -477,7 +478,7 @@ def methodManifoldExplore(C0, C1, dir, hits, sampler):
                 beta = min(1.0, beta * 2.0)
                 foundBetter = True
             else:
-                print(f"ME {i+1}: no improvement (|dpold|={np.linalg.norm(dpold):.4g}, |dpnew|={np.linalg.norm(dpnew):.4g}), reducing beta.")
+                print(f"ME {i+1}: no improvement (|dpold|={np.linalg.norm(dpold):.4g}, |dpnew|={np.linalg.norm(dpnew):.4g}), greenucing beta.")
         
         if not foundBetter:
             beta = beta * 0.5
