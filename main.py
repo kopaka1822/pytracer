@@ -31,7 +31,7 @@ if planes is glass_globe_scene:
     C1 = np.array([-6.4, 2.4])
     C1_angle = -10.8
 
-draw_differentials = False
+draw_differentials = True
 draw_guess = True
 draw_normals = False
 monte_carlo = False # use monte carlo sampling for refraction/reflection decisions
@@ -42,9 +42,7 @@ rng_seed = 0
 # labels
 LABEL_RAY = "C ray"
 LABEL_RAY2 = "L ray"
-LABEL_RAY2_DIFF = "differential"
-LABEL_RAY2_PRED = "$C^p$ ray" # predicted path
-LABEL_RAY2_ITERATION = "last iteration"
+LABEL_RAY_DIFF = "ray diff"
 LABEL_P = "$P$"
 LABEL_P_OFFSET = 0.2 # xoffset 
 LABEL_C1 = "$C$"
@@ -106,7 +104,12 @@ def draw_scene():
         ax.plot([ray.P()[0], hit.P()[0]], [ray.P()[1], hit.P()[1]], 'g-', label=LABEL_RAY if i == 0 else None)
 
         # Transfer the ray to the hit point
+        prevDiffP = ray.P() + ray.dP()
         ray = ray.transfer(hit)
+        curDiffP = ray.P() + ray.dP()
+        if draw_differentials:
+            ax.plot([prevDiffP[0], curDiffP[0]], [prevDiffP[1], curDiffP[1]], 'b--', label=LABEL_RAY_DIFF if i == 0 else None)
+
         lastP = ray.P()
         ray = ray.sampleNext(hit, sampler)
         if ray is None:
