@@ -211,6 +211,7 @@ def computeDDforLight(P, L, dPdx):
 
 def methodPointToLight(P, L, hits, rayIn):
     ray = Ray(P, L - P, rayIn.dP(), computeDDforLight(P, L, rayIn.dP()))
+    rayDirection = ray.D() # default direction from P to L
 
     rayRef = ray.transfer2(L, -ray.D(), np.linalg.norm(L - P))
     # draw reference ray differential
@@ -227,16 +228,16 @@ def methodPointToLight(P, L, hits, rayIn):
         N = hit.ShadingN()
         virtualT = hit.T() - lastTMin
         # check if front face or back face hit
-        if np.dot(hit.Plane().N(), ray.D()) < 0:
+        if np.dot(hit.Plane().N(), rayDirection) < 0:
             # front face hit (enter medium)
             eta = 1.0 / eta # flip ior
-            rayDirIn = ray.D()
-            rayDirOut = Ray._refract(ray.D(), N, eta) # always possible, eta < 1.0
+            rayDirIn = rayDirection
+            rayDirOut = Ray._refract(rayDirection, N, eta) # always possible, eta < 1.0
         else:
             # back face hit (exit medium)
             N = -N
-            rayDirOut = ray.D()
-            rayDirIn = Ray._refract(ray.D(), N, 1.0 / eta) # always possible, 1/eta < 1.0
+            rayDirOut = rayDirection
+            rayDirIn = Ray._refract(rayDirection, N, 1.0 / eta) # always possible, 1/eta < 1.0
             # virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
         
         # create ray for current ray model
@@ -283,6 +284,7 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
         ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=None)
 
     ray = Ray(L, P - L, None, -computeDDforLight(P, L, rayIn.dP()))
+    rayDirection = ray.D() # default direction from L to P
 
     lastTMin = 0.0
     maxT = np.linalg.norm(L - P)
@@ -293,16 +295,16 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
         N = hit.ShadingN()
         virtualT = maxT - hit.T() - lastTMin
         # check if front face or back face hit
-        if np.dot(hit.Plane().N(), ray.D()) < 0:
+        if np.dot(hit.Plane().N(), rayDirection) < 0:
             # front face hit (enter medium)
             eta = 1.0 / eta # flip ior
-            rayDirIn = ray.D()
-            rayDirOut = Ray._refract(ray.D(), N, eta) # always possible, eta < 1.0
+            rayDirIn = rayDirection
+            rayDirOut = Ray._refract(rayDirection, N, eta) # always possible, eta < 1.0
         else:
             # back face hit (exit medium)
             N = -N
-            rayDirOut = ray.D()
-            rayDirIn = Ray._refract(ray.D(), N, 1.0 / eta) # always possible, 1/eta < 1.0
+            rayDirOut = rayDirection
+            rayDirIn = Ray._refract(rayDirection, N, 1.0 / eta) # always possible, 1/eta < 1.0
             # virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
         
         # create ray for current ray model
