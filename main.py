@@ -40,6 +40,9 @@ monte_carlo = False # use monte carlo sampling for refraction/reflection decisio
 methods = ["PointToLight", "LightToPoint"]
 # selected method for UI
 selected_method = 1
+# manifold exploration for reference
+manifold_iterations = 5
+draw_last_iteration = True
 
 # new RNG seed (0..1)
 rng_seed = 0
@@ -130,9 +133,10 @@ def draw_scene():
     # get direct hits from P to L1 and plot them
     phit = hits[-1]
     hits = getDirectHits(lastP, L1, prevPlane)
-    for hit in hits:
-        # plot points for each hit (unlabeled) in orange
-        ax.plot(hit.P()[0], hit.P()[1], marker='o', color='orange')
+    draw_hits(hits, color='orange')
+
+    # draw manifold exploration result
+    methodManifoldExplore(L1, lastP)
 
     if selected_method == 0:
         methodPointToLight(lastP, L1, hits, ray)
@@ -143,8 +147,14 @@ def draw_scene():
     if draw_guess:
         ax.plot([lastP[0], L1[0]], [lastP[1], L1[1]], color='orange', linestyle='-', label="Direct Connection")
 
+    
+
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
+
+def draw_hits(hits, color):
+    for hit in hits:
+        ax.plot(hit.P()[0], hit.P()[1], marker='o', color=color)
 
 # ----------------------------------------------------------------
 # Shadow Methods
@@ -313,6 +323,37 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
 # Manifold Exploration Method
 # ---------------------------------------------------------------
 
+def traceLightToPoint(P, L, dir):
+    '''All hits from actually tracing a ray from L to P, including hits[0] = L and hits[-1] = P'''
+    ray = Ray(L, dir)
+    prevPlane = None
+    hits = []
+    pplane = Plane.fromNormal(P, L - P) # simple plane at P with normal facing L, used for final intersection
+    lplane = Plane.fromNormal(L, P - L) 
+    hits.append(Hit(lplane, L, 0.0)) # add light as first hit
+    for i in range(max_bounces):
+        hit = closestIntersect(ray, prevPlane)
+        phit = ray.calcHit(pplane, forceIntersect=True)
+        if hit is None: 
+            hits.append(phit) # final intersect with P-plane and stop
+            break
+        if phit.T() > 0 and phit.T() <= hit.T():
+            hits.append(phit) # final intersect with P-plane and stop
+            break
+        hits.append(hit)
+        ray = ray.transfer(hit)
+        if hit.Plane().Ior() == 0.0:
+            ray = None # stop ray here
+        else:
+            ray = ray.refract(hit) # force refraction
+        if ray is None:
+            # ignore refraction -> direct connect to P-Plane last
+            hits.append(phit)
+            break
+        prevPlane = hit.Plane()
+    
+    return hits
+
 def computeDerivatives(hits):
     if len(hits) < 2:
         return []
@@ -406,25 +447,24 @@ def computeDerivatives(hits):
     
     return Ainv, Bn
 
-def methodManifoldExplore(C0, C1, dir, hits, sampler):
-    if len(hits) == 0: return dir # envmap hit
-    if len(hits) == 1: return hits[0].P() - C0 # direct connection
+def methodManifoldExplore(L, P):
+    #if len(hits) == 0: return dir # envmap hit
+    #if len(hits) == 1: return hits[0].P() - C0 # direct connection
     
-    # in normal ME, x1 is fixed and xn is varied. We want to vary x1 (C1->C0) and keep P fixed (xn), so we reverse the hits
-    rhits = reverseHits(C0, dir, hits, includeP=True)
-    rsampler = sampler.reverse()
+    # in normal ME, x1 is fixed and xn is varied. x1 = L, xn = P
+    rhits = traceLightToPoint(P, L, P - L) # actual ray via direct connection from L to P
 
     print("-----------------------------------------------------------------------------")
     beta = 1.0
-    for i in range(max(iterations, 1)):
-        dp = C0 - rhits[-1].P() # = (xn'-xn). rhits[-1] should be C1 initially (but projected onto the C0 plane)
+    for i in range(max(manifold_iterations, 1)):
+        dp = P - rhits[-1].P() # = (xn'-xn). rhits[-1] should be close to P initialially, and converge toward P
         dp = dp.reshape((2,1)) # dim: 2x1
         Tp1 = rhits[1].Plane().Tangent().reshape((2,1)) # = T(x2) dim: 2x1
         TpnT = rhits[-1].Plane().Tangent().reshape((1,2)) # = T(xn)^T dim: 1x2
         P1 = np.zeros(len(rhits) - 2) # = P2: dim: 1xn
         P1[0] = 1.0 # only extract the second vertex (which is the first entry in the A matrix)
         P1 = P1.reshape((1, len(rhits) - 2)) # dim: 1xn
-        # TODO this could be cached, only requigreen if rhits changes
+        # TODO this could be cached, only required if rhits changes
         Ainv, Bn = computeDerivatives(rhits) # Ainv: dim: nxn, Bn: dim: nx1
 
         # intermediate results
@@ -434,60 +474,37 @@ def methodManifoldExplore(C0, C1, dir, hits, sampler):
         print(f"ME {i+1}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
 
         p1new = rhits[1].P() - beta * offsetVector1.flatten() # why does wenzel use - ?
-        p0dir = p1new - rhits[0].P()
+        p0dir = p1new - rhits[0].P() # direction from L (x1) to x2
         rhitsnew = [rhits[0]]
-        rsamplernew = rsampler.copy()
 
         # trace new hits
-        ray2 = Ray(rhits[0].P(), p0dir)
-        prevPlane = hits[-1].Plane() # plane at P
-        cplane = rhits[-1].Plane() # plane at C0 (final plane)
-
-        for j in range(1, len(rhits) - 1):
-            hit2 = closestIntersect(ray2, prevPlane)
-            if hit2 is None:
-                break # TODO intersect with P-plane
-            if draw_last_iteration and i == iterations - 1:
-                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=LABEL_RAY2_ITERATION if j == 1 else None)
-            if draw_guess and i == 0:
-                ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=LABEL_RAY2 if j == 1 else None)
-            rhitsnew.append(hit2)
-            ray2 = ray2.transfer(hit2)
-            ray2 = ray2.sampleNext(hit2, rsamplernew)
-            if ray2 is None:
-                break
-            prevPlane = hit2.Plane()
+        rhitsnew = traceLightToPoint(P, L, p0dir)
+        if draw_last_iteration and i == manifold_iterations - 1:
+            pass
+        if draw_guess and i == 0:
+            pass
         
-        # final intersection with C0 plane
-        if ray2 is not None:
-            hit2 = ray2.calcHit(cplane, forceIntersect=True)
-            if hit2.T() > 0:
-                if draw_last_iteration and i == iterations - 1:
-                    ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'r-', label=None)
-                if draw_guess and i == 0:
-                    ax.plot([ray2.P()[0], hit2.P()[0]], [ray2.P()[1], hit2.P()[1]], 'b-', label=None)
-                rhitsnew.append(hit2)
-
         foundBetter = False
-        if len(rhitsnew) != len(rhits):
-            print(f"ME {i+1}: expected {len(rhits)} hits, got {len(rhitsnew)} hits, greenucing beta.")
+        
+        # check if error got smaller
+        # TODO change this to angle error between P and L
+        dpold = P - rhits[-1].P()
+        dpnew = P - rhitsnew[-1].P()
+        if np.linalg.norm(dpnew) < np.linalg.norm(dpold):
+            rhits = rhitsnew
+            print(f"ME {i+1}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}.")
+            beta = min(1.0, beta * 2.0)
+            foundBetter = True
         else:
-            # check if error got smaller
-            dpold = C0 - rhits[-1].P()
-            dpnew = C0 - rhitsnew[-1].P()
-            if np.linalg.norm(dpnew) < np.linalg.norm(dpold):
-                rhits = rhitsnew
-                print(f"ME {i+1}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}.")
-                beta = min(1.0, beta * 2.0)
-                foundBetter = True
-            else:
-                print(f"ME {i+1}: no improvement (|dpold|={np.linalg.norm(dpold):.4g}, |dpnew|={np.linalg.norm(dpnew):.4g}), greenucing beta.")
+            print(f"ME {i+1}: no improvement (|dpold|={np.linalg.norm(dpold):.4g}, |dpnew|={np.linalg.norm(dpnew):.4g}), reducing beta.")
         
         if not foundBetter:
             beta = beta * 0.5
 
-    newDir = rhits[-2].P() - rhits[-1].P()
-    return newDir / np.linalg.norm(newDir)
+    draw_hits(rhits, color='red')
+    #newDir = rhits[-2].P() - rhits[-1].P()
+    #finalHits  traceLightToPoint(P, L, newDir)
+    #return newDir / np.linalg.norm(newDir)
 
 # matrix multiplication
 def mul(A, B):

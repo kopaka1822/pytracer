@@ -88,3 +88,17 @@ class Plane:
 
     def __repr__(self) -> str:
         return f"Plane(P1={self._P1}, P2={self._P2}, N={self._normal}, IOR={self._ior})"
+
+    @staticmethod
+    def fromNormal(P: np.ndarray, normal: np.ndarray, ior: float = 1.0) -> "Plane":
+        n = np.asarray(normal, dtype=float)
+        assert np.linalg.norm(n) != 0
+
+        # tangent is 90° CCW rotation of the normal
+        t = np.array([-n[1], n[0]], dtype=float)
+
+        P = np.asarray(P, dtype=float)
+        P1 = P
+        P2 = P + t
+
+        return Plane(P1, P2, ior)
