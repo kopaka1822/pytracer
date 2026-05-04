@@ -308,7 +308,7 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
             N = -N
             rayDirOut = rayDirection
             rayDirIn = Ray._refract(rayDirection, N, 1.0 / eta) # always possible, 1/eta < 1.0
-            # virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
+            #virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
         
         # create ray for current ray model
         startP = ray.P()
@@ -479,6 +479,7 @@ def methodManifoldExplore(L, P, dPdx, pplane):
     
     # in normal ME, x1 is fixed and xn is varied. x1 = L, xn = P
     rhits = traceLightToPoint(P, L, P - L, pplane) # actual ray via direct connection from L to P
+    if len(rhits) <= 2: return # not enough hits for ME
 
     print("-----------------------------------------------------------------------------")
     beta = 1.0
@@ -497,7 +498,7 @@ def methodManifoldExplore(L, P, dPdx, pplane):
         tangentOffsetN = TpnT @ dp # dim: 1x1
         tangentOffset1 = P1 @ Ainv @ Bn @ tangentOffsetN # dim: 1x1
         offsetVector1 = Tp1 @ tangentOffset1 # dim: 2x1
-        print(f"ME {i+1}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
+        #print(f"ME {i+1}: dp={dp.flatten()}, tangentOffsetN={tangentOffsetN.flatten()}, tangentOffset1={tangentOffset1.flatten()}, offsetVector1={offsetVector1.flatten()}, beta={beta:.4g}")
 
         p1new = rhits[1].P() - beta * offsetVector1.flatten() # why does wenzel use - ?
         p0dir = p1new - rhits[0].P() # direction from L (x1) to x2
@@ -523,13 +524,13 @@ def methodManifoldExplore(L, P, dPdx, pplane):
         if angleNew > angleOld:
             rhits = rhitsnew
             print(f"ME {i+1}: improved solution with angle value={angleNew:.4g}.")
-            beta = min(1.0, beta * 2.0)
+            beta = np.clip(beta * 2.0, -1.0, 1.0)
             foundBetter = True
         else:
             print(f"ME {i+1}: no improvement (angleOld={angleOld:.4g}, angleNew={angleNew:.4g}), reducing beta.")
         
         if not foundBetter:
-            beta = beta * 0.5
+            beta = -beta * 0.5 # allow steps with alternatign signs
 
 
     # estimate ray differential for direct transfer
