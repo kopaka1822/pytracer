@@ -41,7 +41,7 @@ methods = ["PointToLight", "LightToPoint"]
 # selected method for UI
 selected_method = 1
 # manifold exploration for reference
-manifold_iterations = 5
+manifold_iterations = 20
 draw_last_iteration = True
 
 # new RNG seed (0..1)
@@ -133,7 +133,7 @@ def draw_scene():
     # get direct hits from P to L1 and plot them
     phit = hits[-1]
     hits = getDirectHits(lastP, L1, prevPlane)
-    draw_hits(hits, color='orange')
+    draw_hits(hits, color='orange', drawRay=False, drawDiff=False)
 
     # draw manifold exploration result
     methodManifoldExplore(L1, lastP)
@@ -152,9 +152,31 @@ def draw_scene():
     ax.legend(loc="upper right")
     fig.canvas.draw_idle()
 
-def draw_hits(hits, color):
+def draw_hits(hits, color, drawRay = True, drawDiff = True, rayLabel=None, diffLabel=None, initialdP=None, initialdD=None):
     for hit in hits:
         ax.plot(hit.P()[0], hit.P()[1], marker='o', color=color)
+
+    if drawRay:
+        for i in range(len(hits) - 1):
+            ax.plot([hits[i].P()[0], hits[i+1].P()[0]], [hits[i].P()[1], hits[i+1].P()[1]], color=color, linestyle='-', label=rayLabel if i == 0 else None)
+
+    if drawDiff and draw_differentials: # reconstruct ray to do differentials
+        ray = Ray(hits[0].P(), hits[1].P() - hits[0].P(), initialdP, initialdD)
+        for i in range(1, len(hits)):
+            hit = hits[i]
+
+            # transfer to hit
+            startdP = ray.P() + ray.dP()
+            ray = ray.transfer(hit)
+            enddP = ray.P() + ray.dP()
+
+            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color=color, linestyle='--', label=diffLabel if i == 1 else None)
+
+            if hit.Plane().Ior() == 0.0:
+                break # stop ray here
+            ray = ray.refract(hit) # TODO refract or reflect?
+            if ray is None:
+                break
 
 # ----------------------------------------------------------------
 # Shadow Methods
@@ -501,7 +523,7 @@ def methodManifoldExplore(L, P):
         if not foundBetter:
             beta = beta * 0.5
 
-    draw_hits(rhits, color='red')
+    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff")
     #newDir = rhits[-2].P() - rhits[-1].P()
     #finalHits  traceLightToPoint(P, L, newDir)
     #return newDir / np.linalg.norm(newDir)
