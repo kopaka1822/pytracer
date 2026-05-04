@@ -136,7 +136,7 @@ def draw_scene():
     draw_hits(hits, color='orange', drawRay=False, drawDiff=False)
 
     # draw manifold exploration result
-    methodManifoldExplore(L1, lastP, ray.dP())
+    methodManifoldExplore(L1, lastP, ray.dP(), phit.Plane())
 
     if selected_method == 0:
         methodPointToLight(lastP, L1, hits, ray)
@@ -350,13 +350,12 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
 # Manifold Exploration Method
 # ---------------------------------------------------------------
 
-def traceLightToPoint(P, L, dir):
+def traceLightToPoint(P, L, dir, pplane):
     '''All hits from actually tracing a ray from L to P, including hits[0] = L and hits[-1] = P'''
     ray = Ray(L, dir)
     prevPlane = None
     hits = []
-    pplane = Plane.fromNormal(P, L - P) # simple plane at P with normal facing L, used for final intersection
-    lplane = Plane.fromNormal(L, P - L) 
+    lplane = Plane.fromNormal(L, P - L) # origin
     hits.append(Hit(lplane, L, 0.0)) # add light as first hit
     for i in range(max_bounces):
         hit = closestIntersect(ray, prevPlane)
@@ -474,12 +473,12 @@ def computeDerivatives(hits):
     
     return Ainv, Bn
 
-def methodManifoldExplore(L, P, dPdx):
+def methodManifoldExplore(L, P, dPdx, pplane):
     #if len(hits) == 0: return dir # envmap hit
     #if len(hits) == 1: return hits[0].P() - C0 # direct connection
     
     # in normal ME, x1 is fixed and xn is varied. x1 = L, xn = P
-    rhits = traceLightToPoint(P, L, P - L) # actual ray via direct connection from L to P
+    rhits = traceLightToPoint(P, L, P - L, pplane) # actual ray via direct connection from L to P
 
     print("-----------------------------------------------------------------------------")
     beta = 1.0
@@ -505,7 +504,7 @@ def methodManifoldExplore(L, P, dPdx):
         rhitsnew = [rhits[0]]
 
         # trace new hits
-        rhitsnew = traceLightToPoint(P, L, p0dir)
+        rhitsnew = traceLightToPoint(P, L, p0dir, pplane)
         if draw_last_iteration and i == manifold_iterations - 1:
             pass
         if draw_guess and i == 0:
@@ -537,7 +536,7 @@ def methodManifoldExplore(L, P, dPdx):
     dDdx = -computeDDforLight(P, L, dPdx)
     draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff", initialdD=dDdx)
     #newDir = rhits[-2].P() - rhits[-1].P()
-    #finalHits  traceLightToPoint(P, L, newDir)
+    #finalHits  traceLightToPoint(P, L, newDir, pplane)
     #return newDir / np.linalg.norm(newDir)
 
 # matrix multiplication
