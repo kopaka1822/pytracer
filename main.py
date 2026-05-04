@@ -136,7 +136,7 @@ def draw_scene():
     draw_hits(hits, color='orange', drawRay=False, drawDiff=False)
 
     # draw manifold exploration result
-    methodManifoldExplore(L1, lastP)
+    methodManifoldExplore(L1, lastP, ray.dP())
 
     if selected_method == 0:
         methodPointToLight(lastP, L1, hits, ray)
@@ -161,7 +161,10 @@ def draw_hits(hits, color, drawRay = True, drawDiff = True, rayLabel=None, diffL
             ax.plot([hits[i].P()[0], hits[i+1].P()[0]], [hits[i].P()[1], hits[i+1].P()[1]], color=color, linestyle='-', label=rayLabel if i == 0 else None)
 
     if drawDiff and draw_differentials: # reconstruct ray to do differentials
-        ray = Ray(hits[0].P(), hits[1].P() - hits[0].P(), initialdP, initialdD)
+        #ray = Ray(hits[0].P(), hits[1].P() - hits[0].P(), initialdP, initialdD)
+        ray = Ray(hits[0].P(), hits[1].P() - hits[0].P(), initialdP, None)
+        # only use the length of dD, and not its actual value, beause it might not be perpendicular to the ray direction
+        ray = Ray(ray.P(), ray.D(), ray.dP(), ray.dD() * (np.linalg.norm(initialdD) / np.linalg.norm(ray.dD())) if initialdD is not None else None)
         for i in range(1, len(hits)):
             hit = hits[i]
 
@@ -471,7 +474,7 @@ def computeDerivatives(hits):
     
     return Ainv, Bn
 
-def methodManifoldExplore(L, P):
+def methodManifoldExplore(L, P, dPdx):
     #if len(hits) == 0: return dir # envmap hit
     #if len(hits) == 1: return hits[0].P() - C0 # direct connection
     
@@ -529,7 +532,10 @@ def methodManifoldExplore(L, P):
         if not foundBetter:
             beta = beta * 0.5
 
-    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff")
+
+    # estimate ray differential for direct transfer
+    dDdx = -computeDDforLight(P, L, dPdx)
+    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff", initialdD=dDdx)
     #newDir = rhits[-2].P() - rhits[-1].P()
     #finalHits  traceLightToPoint(P, L, newDir)
     #return newDir / np.linalg.norm(newDir)
