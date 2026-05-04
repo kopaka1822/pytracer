@@ -364,12 +364,12 @@ def traceLightToPoint(P, L, dir):
         if phit.T() > 0 and phit.T() <= hit.T():
             hits.append(phit) # final intersect with P-plane and stop
             break
+        if hit.Plane().Ior() == 0.0: # arrived on final plane
+            hits.append(phit)
+            break
         hits.append(hit)
         ray = ray.transfer(hit)
-        if hit.Plane().Ior() == 0.0:
-            ray = None # stop ray here
-        else:
-            ray = ray.refract(hit) # force refraction
+        ray = ray.refract(hit) # force refraction
         if ray is None:
             # ignore refraction -> direct connect to P-Plane last
             hits.append(phit)
