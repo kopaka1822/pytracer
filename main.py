@@ -512,15 +512,19 @@ def methodManifoldExplore(L, P):
         
         # check if error got smaller
         # TODO change this to angle error between P and L
-        dpold = P - rhits[-1].P()
-        dpnew = P - rhitsnew[-1].P()
-        if np.linalg.norm(dpnew) < np.linalg.norm(dpold):
+        refDir = (P - L) / np.linalg.norm(P - L)
+        dirOld = (rhits[-1].P() - L) / np.linalg.norm(rhits[-1].P() - L)
+        dirNew = (rhitsnew[-1].P() - L) / np.linalg.norm(rhitsnew[-1].P() - L)
+        angleOld = np.dot(refDir, dirOld)
+        angleNew = np.dot(refDir, dirNew)
+
+        if angleNew > angleOld:
             rhits = rhitsnew
-            print(f"ME {i+1}: improved solution with |dp|={np.linalg.norm(dpnew):.4g}.")
+            print(f"ME {i+1}: improved solution with angle value={angleNew:.4g}.")
             beta = min(1.0, beta * 2.0)
             foundBetter = True
         else:
-            print(f"ME {i+1}: no improvement (|dpold|={np.linalg.norm(dpold):.4g}, |dpnew|={np.linalg.norm(dpnew):.4g}), reducing beta.")
+            print(f"ME {i+1}: no improvement (angleOld={angleOld:.4g}, angleNew={angleNew:.4g}), reducing beta.")
         
         if not foundBetter:
             beta = beta * 0.5
