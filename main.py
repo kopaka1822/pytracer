@@ -227,6 +227,15 @@ def softenPlaneNormals(rayDirection, N, plane):
     N2 = (1.0 - fac) * plane.N2() + fac * rayDirection # linear interpolation of N2 and rayDirection
     return Plane(plane.P1(), plane.P2(), plane.Ior(), N1=N1, N2=N2)
 
+
+def limitdD(ray, ddprev):
+    ddprevlen = np.linalg.norm(ddprev)
+    ddlen = np.linalg.norm(ray.dD())
+    #if ddlen > 4.0 * ddprevlen:
+    #    newdd = ray.dD() * (4.0 * ddprevlen / ddlen)
+    #    return Ray(ray.P(), ray.D(), ray.dP(), newdd)
+    return ray
+
 def methodPointToLight(P, L, hits, rayIn):
     ray = Ray(P, L - P, rayIn.dP(), computeDDforLight(P, L, rayIn.dP()))
     rayDirection = ray.D() # default direction from P to L
@@ -271,13 +280,17 @@ def methodPointToLight(P, L, hits, rayIn):
         enddP = ray.P() + ray.dP()
 
         # refract with current model
+        prevdd = ray.dD()
         ray = ray.refract(hit)
         ray = Ray(endP, ray.D(), ray.dP(), ray.dD())
-
+        ray = limitdD(ray, prevdd)
+        
         # draw ray model from startP to endP
         ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
         if draw_differentials:
             ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
+            # also draw a tiny tick for the hit point
+            ax.plot(enddP[0], enddP[1], marker='x', color='green')
 
         lastTMin = hit.T() # update tmin
 
@@ -294,6 +307,7 @@ def methodPointToLight(P, L, hits, rayIn):
     ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
     if draw_differentials:
         ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
+
 
 def methodLightToPoint(P, L, hits, rayIn, phit):
     rayRef = Ray(L, P - L, None, -computeDDforLight(P, L, rayIn.dP()))
@@ -333,8 +347,6 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
             rayDirIn = Ray._refract(rayDirection, N, 1.0 / eta) # always possible, 1/eta < 1.0
             #virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
         # here, dot(N, rayDirIn) should be negative
-        
-        
 
         # create ray for current ray model
         startP = ray.P()
@@ -345,13 +357,18 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
         enddP = ray.P() + ray.dP()
 
         # refract with current model
+        ddprev = ray.dD()
         ray = ray.refract(hit)
         ray = Ray(endP, ray.D(), ray.dP(), ray.dD())
+        ray = limitdD(ray, ddprev)
 
         # draw ray model from startP to endP
         ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
+        ax.plot(endP[0], endP[1], marker='x', color='green')
         if draw_differentials:
             ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
+            # also draw a tiny tick for the hit point
+            ax.plot(enddP[0], enddP[1], marker='x', color='green')
 
         lastTMin = maxT - hit.T() # update tmin
 
