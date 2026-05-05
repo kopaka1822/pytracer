@@ -212,6 +212,15 @@ def computeDDforLight(P, L, dPdx):
     dddx = -dPdx
     return (dd * dddx - np.dot(d, dddx) * d) / (dd ** 1.5)
 
+def softenPlaneNormals(rayDirection, N, plane):
+    if np.dot(N, rayDirection) < 0:
+        rayDirection = -rayDirection # force dot product positive
+    strength = 1.0 - np.dot(rayDirection, N) # should be 1 for perpendicular rays and 0 for parallel rays
+    fac = strength ** 3.0
+    N1 = (1.0 - fac) * plane.N1() + fac * rayDirection # linear interpolation of N1 and rayDirection
+    N2 = (1.0 - fac) * plane.N2() + fac * rayDirection # linear interpolation of N2 and rayDirection
+    return Plane(plane.P1(), plane.P2(), plane.Ior(), N1=N1, N2=N2)
+
 def methodPointToLight(P, L, hits, rayIn):
     ray = Ray(P, L - P, rayIn.dP(), computeDDforLight(P, L, rayIn.dP()))
     rayDirection = ray.D() # default direction from P to L
@@ -227,6 +236,10 @@ def methodPointToLight(P, L, hits, rayIn):
     rayDirIn = ray.D()
     rayDirOut = ray.D()
     for hit in hits:
+        # soften the hit plane
+        splane = softenPlaneNormals(rayDirection, hit.ShadingN(), hit.Plane())
+        hit = Hit(splane, hit.P(), hit.T()) # overwrite hit with softer plane
+
         eta = hit.Plane().Ior()
         N = hit.ShadingN()
         virtualT = hit.T() - lastTMin
@@ -242,7 +255,7 @@ def methodPointToLight(P, L, hits, rayIn):
             rayDirOut = rayDirection
             rayDirIn = Ray._refract(rayDirection, N, 1.0 / eta) # always possible, 1/eta < 1.0
             # virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
-        
+
         # create ray for current ray model
         startP = ray.P()
         startdP = ray.P() + ray.dP()
@@ -294,6 +307,10 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
     rayDirIn = ray.D()
     rayDirOut = ray.D()
     for hit in reversed(hits):
+        # soften the hit plane
+        splane = softenPlaneNormals(rayDirection, hit.ShadingN(), hit.Plane())
+        hit = Hit(splane, hit.P(), hit.T()) # overwrite hit with softer plane
+
         eta = hit.Plane().Ior()
         N = hit.ShadingN()
         virtualT = maxT - hit.T() - lastTMin
@@ -309,7 +326,10 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
             rayDirOut = rayDirection
             rayDirIn = Ray._refract(rayDirection, N, 1.0 / eta) # always possible, 1/eta < 1.0
             #virtualT *= np.dot(N, rayDirOut) / np.dot(N, rayDirIn)
+        # here, dot(N, rayDirIn) should be negative
         
+        
+
         # create ray for current ray model
         startP = ray.P()
         startdP = ray.P() + ray.dP()

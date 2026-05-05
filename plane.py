@@ -2,7 +2,7 @@ import numpy as np
 
 class Plane:
     # ior: 1.0 = only reflection, 0.0 = absorb, 0<ior<1.0 and ior>1.0 refraction
-    def __init__(self, P1: np.ndarray, P2: np.ndarray, ior: float = 1.0, P0: np.ndarray = None, P3: np.ndarray = None):
+    def __init__(self, P1: np.ndarray, P2: np.ndarray, ior: float = 1.0, P0: np.ndarray = None, P3: np.ndarray = None, N1: np.ndarray = None, N2: np.ndarray = None):
         self._P1 = np.asarray(P1, dtype=float)
         self._P2 = np.asarray(P2, dtype=float)
 
@@ -17,6 +17,9 @@ class Plane:
         normal = np.array([-dir[1], dir[0]], dtype=float)
         normal1 = np.array([-dir1[1], dir1[0]], dtype=float)
         normal2 = np.array([-dir2[1], dir2[0]], dtype=float)
+        # overwrite normals if provided
+        if N1 is not None: normal1 = N1
+        if N2 is not None: normal2 = N2
 
         self._normal = normal / np.linalg.norm(normal) # actual surface normal
         self._ior = float(ior)
@@ -35,6 +38,12 @@ class Plane:
 
     def N(self) -> np.ndarray:
         return self._normal
+    
+    def N1(self) -> np.ndarray:
+        return self._normal1
+    
+    def N2(self) -> np.ndarray:
+        return self._normal2
     
     def Tangent(self) -> np.ndarray:
         dir_vec = self._P2 - self._P1
