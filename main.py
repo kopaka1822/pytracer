@@ -32,6 +32,9 @@ if planes is glass_scene:
 # if planes is glass_globe_scene:
 #     C1 = np.array([-6.4, 2.4])
 #     C1_angle = -10.8
+if planes is egg_scene:
+    C1 = np.array([-6.8, -10.0])
+    C1_angle = 14.4
 
 draw_differentials = True
 draw_guess = True
@@ -43,6 +46,8 @@ selected_method = 1
 # manifold exploration for reference
 manifold_iterations = 20
 draw_last_iteration = True
+
+MANIFOLD_DEBUG_PRINT = False
 
 # new RNG seed (0..1)
 rng_seed = 0
@@ -216,7 +221,8 @@ def softenPlaneNormals(rayDirection, N, plane):
     if np.dot(N, rayDirection) < 0:
         rayDirection = -rayDirection # force dot product positive
     strength = 1.0 - np.dot(rayDirection, N) # should be 1 for perpendicular rays and 0 for parallel rays
-    fac = strength ** 3.0
+    #fac = (strength ** 1.0) * 0.3
+    fac = 0.0
     N1 = (1.0 - fac) * plane.N1() + fac * rayDirection # linear interpolation of N1 and rayDirection
     N2 = (1.0 - fac) * plane.N2() + fac * rayDirection # linear interpolation of N2 and rayDirection
     return Plane(plane.P1(), plane.P2(), plane.Ior(), N1=N1, N2=N2)
@@ -501,7 +507,8 @@ def methodManifoldExplore(L, P, dPdx, pplane):
     rhits = traceLightToPoint(P, L, P - L, pplane) # actual ray via direct connection from L to P
     if len(rhits) <= 2: return # not enough hits for ME
 
-    print("-----------------------------------------------------------------------------")
+    if MANIFOLD_DEBUG_PRINT:
+        print("-----------------------------------------------------------------------------")
     beta = 1.0
     for i in range(max(manifold_iterations, 1)):
         dp = P - rhits[-1].P() # = (xn'-xn). rhits[-1] should be close to P initialially, and converge toward P
@@ -543,11 +550,13 @@ def methodManifoldExplore(L, P, dPdx, pplane):
 
         if angleNew > angleOld:
             rhits = rhitsnew
-            print(f"ME {i+1}: improved solution with angle value={angleNew:.4g}.")
+            if MANIFOLD_DEBUG_PRINT:
+                print(f"ME {i+1}: improved solution with angle value={angleNew:.4g}.")
             beta = np.clip(beta * 2.0, -1.0, 1.0)
             foundBetter = True
         else:
-            print(f"ME {i+1}: no improvement (angleOld={angleOld:.4g}, angleNew={angleNew:.4g}), reducing beta.")
+            if MANIFOLD_DEBUG_PRINT:
+                print(f"ME {i+1}: no improvement (angleOld={angleOld:.4g}, angleNew={angleNew:.4g}), reducing beta.")
         
         if not foundBetter:
             beta = -beta * 0.5 # allow steps with alternatign signs
