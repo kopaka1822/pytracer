@@ -38,6 +38,22 @@ def addBox(planes, Pmin, Pmax, faceOutside = True, ior=1.0):
         else:
             planes.append(Plane(p2, p1, ior=ior))
 
+def addWave(planes, Pstart, Pend, amplitude, frequency, ior=1.333, numSegments=128):
+    Pstart = np.array(Pstart)
+    Pend = np.array(Pend)
+    N = (Pend - Pstart) / np.linalg.norm(Pend - Pstart)
+    N = np.array([-N[1], N[0]]) # rotate by 90 degrees to get normal
+    for i in range(numSegments):
+        t1 = i / numSegments
+        t2 = (i + 1) / numSegments
+        t0 = (i - 1) / numSegments
+        t3 = (i + 2) / numSegments
+        p0 = (1 - t0) * Pstart + t0 * Pend + N * amplitude * np.sin(2 * np.pi * frequency * t0)
+        p1 = (1 - t1) * Pstart + t1 * Pend + N * amplitude * np.sin(2 * np.pi * frequency * t1)
+        p2 = (1 - t2) * Pstart + t2 * Pend + N * amplitude * np.sin(2 * np.pi * frequency * t2)
+        p3 = (1 - t3) * Pstart + t3 * Pend + N * amplitude * np.sin(2 * np.pi * frequency * t3)
+        planes.append(Plane(p1, p2, ior=ior, P0=p0, P3=p3))
+
 reflection_scene = [
     Plane([-10, -5], [10, -5]),       # bottom
     Plane([-8, -3], [-3, -1]),        # slanted left
@@ -101,8 +117,12 @@ glass_globe_scene = [
 addBox(glass_globe_scene, [-10, -10], [10, 10], ior=0.0)
 addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegments=256)
 
+pool_scene = []
+addBox(pool_scene, [-10, -10], [10, 10], ior=0.0)
+addWave(pool_scene, [-10, 0], [10, 0], amplitude=0.4, frequency=10.0, numSegments=256)
+
 # SET SCENE ---------------------------------------------- #
-planes = glass_scene
+planes = pool_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None, TMin: float = 0.0, TMax: float = float('inf')) -> Hit | None:
     closest_hit = None

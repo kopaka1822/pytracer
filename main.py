@@ -28,13 +28,17 @@ max_bounces = 10
 if planes is glass_scene:
      C1 = np.array([-6.8, -5.33])
      C1_angle = 8.4
-     L = np.array([-8.2, 5.0])
+     L1 = np.array([-8.2, 5.0])
 # if planes is glass_globe_scene:
 #     C1 = np.array([-6.4, 2.4])
 #     C1_angle = -10.8
 if planes is egg_scene:
     C1 = np.array([-6.8, -10.0])
     C1_angle = 14.4
+if planes is pool_scene:
+    C1 = np.array([-6.8, 0.8])
+    C1_angle = -63.6
+    L1 = np.array([6.4, 3.4])
 
 draw_differentials = True
 draw_guess = True
