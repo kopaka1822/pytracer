@@ -219,6 +219,12 @@ def computeDDforLight(P, L, dPdx):
     dddx = -dPdx
     return (dd * dddx - np.dot(d, dddx) * d) / (dd ** 1.5)
 
+def computeDPDirLight(D, dPdx):
+    """
+    Computes the initial dPdx for a parallel ray going in direction D => Essentiallially orthogonalizes dPdx with respect to D
+    """
+    return dPdx - np.dot(D, dPdx) * D
+
 def softenPlaneNormals(rayDirection, N, plane):
     if np.dot(N, rayDirection) < 0:
         rayDirection = -rayDirection # force dot product positive
@@ -240,6 +246,9 @@ def limitdD(ray, ddprev):
 
 def methodPointToLight(P, L, hits, rayIn):
     ray = Ray(P, L - P, rayIn.dP(), computeDDforLight(P, L, rayIn.dP()))
+    if selected_light == 1: # directional light
+        ray = Ray(P, L - P, computeDPDirLight(ray.D(), rayIn.dP()), np.zeros(2))
+    
     rayDirection = ray.D() # default direction from P to L
 
     rayRef = ray.transfer2(L, -ray.D(), np.linalg.norm(L - P))
@@ -313,15 +322,21 @@ def methodPointToLight(P, L, hits, rayIn):
 
 def methodLightToPoint(P, L, hits, rayIn, phit):
     rayRef = Ray(L, P - L, None, -computeDDforLight(P, L, rayIn.dP()))
-    rayRef = rayRef.transfer2(P, phit.Plane().N(), np.linalg.norm(P - L))
+    if selected_light == 1: # directional light
+        rayRef = Ray(L, P - L, computeDPDirLight(rayRef.D(), rayIn.dP()), np.zeros(2))
+    
+    refStart = L + rayRef.dP()
+    rayRef = rayRef.transfer2(P, phit.Plane().N(), np.linalg.norm(P - L))    
 
     # draw reference ray differential
     if draw_differentials and draw_guess:
-        refStart = L
         refEnd = rayRef.P() + rayRef.dP()
         ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=None)
 
     ray = Ray(L, P - L, None, -computeDDforLight(P, L, rayIn.dP()))
+    if selected_light == 1: # directional light
+        ray = Ray(L, P - L, computeDPDirLight(ray.D(), rayIn.dP()), np.zeros(2))
+    
     rayDirection = ray.D() # default direction from L to P
 
     lastTMin = 0.0
@@ -582,8 +597,15 @@ def methodManifoldExplore(L, P, dPdx, pplane):
 
 
     # estimate ray differential for direct transfer
-    dDdx = -computeDDforLight(P, L, dPdx)
-    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff", initialdD=dDdx)
+    dDdxFinal = -computeDDforLight(P, L, dPdx)
+    dPdxFinal = np.zeros(2)
+    if selected_light == 1: # directional light
+        primaryDir = rhits[1].P() - rhits[0].P()
+        primaryDir = primaryDir / np.linalg.norm(primaryDir)
+        dPdxFinal = computeDPDirLight(primaryDir, dPdx)
+        dDdxFinal = np.zeros(2)
+
+    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff", initialdP=dPdxFinal, initialdD=dDdxFinal)
     #newDir = rhits[-2].P() - rhits[-1].P()
     #finalHits  traceLightToPoint(P, L, newDir, pplane)
     #return newDir / np.linalg.norm(newDir)
