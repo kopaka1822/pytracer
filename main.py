@@ -43,6 +43,8 @@ monte_carlo = False # use monte carlo sampling for refraction/reflection decisio
 methods = ["PointToLight", "LightToPoint"]
 # selected method for UI
 selected_method = 1
+lights = ["Point Light", "Directional Light"]
+selected_light = 0
 # manifold exploration for reference
 manifold_iterations = 20
 draw_last_iteration = True
@@ -611,10 +613,11 @@ ax_sliders = [
     fig.add_axes([0.75, 0.67, 0.2, 0.03]),  # 7 Draw Differentials (checkbox)
     fig.add_axes([0.75, 0.63, 0.2, 0.03]),  # 8 Differential Scale (slider)
     fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Draw Normals (checkbox)
-    fig.add_axes([0.75, 0.48, 0.2, 0.08]),  # 10 Method (radio) - moved slightly down
-    fig.add_axes([0.75, 0.42, 0.2, 0.03]),  # 11 Use N. Diff (checkbox)
-    fig.add_axes([0.75, 0.38, 0.2, 0.03]),  # 12 Monte Carlo (checkbox)
-    fig.add_axes([0.75, 0.34, 0.2, 0.03]),  # 13 RNG Seed (slider)
+    fig.add_axes([0.75, 0.50, 0.2, 0.08]),  # 10 Lights (radio)
+    fig.add_axes([0.75, 0.42, 0.2, 0.08]),  # 11 Method (radio)
+    fig.add_axes([0.75, 0.39, 0.2, 0.03]),  # 12 Use N. Diff (checkbox)
+    fig.add_axes([0.75, 0.36, 0.2, 0.03]),  # 13 Monte Carlo (checkbox)
+    fig.add_axes([0.75, 0.32, 0.2, 0.03]),  # 14 RNG Seed (slider)
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -636,21 +639,21 @@ slider_tangent_scale = Slider(ax_sliders[8], "Differential Scale", 0.001, 0.5, v
 checkbox_draw_normals = CheckButtons(ax_sliders[9], ["Draw Normals"], [draw_normals])
 
 # method selection (radio)
-radio_methods = RadioButtons(ax_sliders[10], methods, active=selected_method)
-
+radio_lights = RadioButtons(ax_sliders[10], lights, active=selected_light)
+radio_methods = RadioButtons(ax_sliders[11], methods, active=selected_method)
 # other toggles
-checkbox_use_n_differentials = CheckButtons(ax_sliders[11], ["Use N Diff."], [Ray.use_normal_differential])
-checkbox_monte_carlo = CheckButtons(ax_sliders[12], ["Monte Carlo refr."], [monte_carlo])
+checkbox_use_n_differentials = CheckButtons(ax_sliders[12], ["Use N Diff."], [Ray.use_normal_differential])
+checkbox_monte_carlo = CheckButtons(ax_sliders[13], ["Monte Carlo refr."], [monte_carlo])
 
 # RNG seed slider
-slider_rng_seed = Slider(ax_sliders[13], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
+slider_rng_seed = Slider(ax_sliders[14], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C1, C1_angle, L1, max_bounces, draw_differentials, draw_guess, draw_normals, monte_carlo, rng_seed, selected_method
+    global C1, C1_angle, L1, max_bounces, draw_differentials, draw_guess, draw_normals, monte_carlo, rng_seed, selected_method, selected_light
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -665,13 +668,14 @@ def update(val):
     monte_carlo = checkbox_monte_carlo.get_status()[0]
     rng_seed = int(slider_rng_seed.val)
     selected_method = methods.index(radio_methods.value_selected)
+    selected_light = lights.index(radio_lights.value_selected)
 
     draw_scene()
 
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_rng_seed]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, checkbox_monte_carlo, checkbox_use_n_differentials, radio_methods]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, checkbox_monte_carlo, checkbox_use_n_differentials, radio_lights, radio_methods]:
     c.on_clicked(update)
 
 # Initial draw
