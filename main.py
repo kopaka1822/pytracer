@@ -39,10 +39,16 @@ if planes is pool_scene:
     C1 = np.array([-6.8, 0.8])
     C1_angle = -63.6
     L1 = np.array([6.4, 3.4])
+if planes is glass_globe_scene:
+    C1 = np.array([-6.8, -2.27])
+    C1_angle = 8.4
+    L1 = np.array([-8.2, 5.0])
 
 draw_differentials = True
 draw_guess = True
 draw_normals = False
+draw_me = True
+draw_model = True
 monte_carlo = False # use monte carlo sampling for refraction/reflection decisions
 methods = ["PointToLight", "LightToPoint"]
 # selected method for UI
@@ -147,7 +153,8 @@ def draw_scene():
     draw_hits(hits, color='orange', drawRay=False, drawDiff=False)
 
     # draw manifold exploration result
-    methodManifoldExplore(L1, lastP, ray.dP(), phit.Plane())
+    if draw_me:
+        methodManifoldExplore(L1, lastP, ray.dP(), phit.Plane())
 
     if selected_method == 0:
         methodPointToLight(lastP, L1, hits, ray)
@@ -301,11 +308,12 @@ def methodPointToLight(P, L, hits, rayIn):
         ray = limitdD(ray, prevdd)
         
         # draw ray model from startP to endP
-        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
-        if draw_differentials:
-            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
-            # also draw a tiny tick for the hit point
-            ax.plot(enddP[0], enddP[1], marker='x', color='green')
+        if draw_model:
+            ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
+            if draw_differentials:
+                ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
+                # also draw a tiny tick for the hit point
+                ax.plot(enddP[0], enddP[1], marker='x', color='green')
 
         lastTMin = hit.T() # update tmin
 
@@ -318,10 +326,10 @@ def methodPointToLight(P, L, hits, rayIn):
     ray = ray.transfer2(ray.P() + finalT * rayDirOut, -rayDirOut, finalT)
     endP = ray.P()
     enddP = ray.P() + ray.dP()
-
-    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
-    if draw_differentials:
-        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
+    if draw_model:
+        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
+        if draw_differentials:
+            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
 
 
 def methodLightToPoint(P, L, hits, rayIn, phit):
@@ -384,12 +392,13 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
         ray = limitdD(ray, ddprev)
 
         # draw ray model from startP to endP
-        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
-        ax.plot(endP[0], endP[1], marker='x', color='green')
-        if draw_differentials:
-            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
-            # also draw a tiny tick for the hit point
-            ax.plot(enddP[0], enddP[1], marker='x', color='green')
+        if draw_model:
+            ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
+            ax.plot(endP[0], endP[1], marker='x', color='green')
+            if draw_differentials:
+                ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
+                # also draw a tiny tick for the hit point
+                ax.plot(enddP[0], enddP[1], marker='x', color='green')
 
         lastTMin = maxT - hit.T() # update tmin
 
@@ -403,9 +412,10 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
     endP = ray.P()
     enddP = ray.P() + ray.dP()
 
-    ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
-    if draw_differentials:
-        ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
+    if draw_model:
+        ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label="Ray Model")
+        if draw_differentials:
+            ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label="Ray Model Diff")
 
 
 
@@ -592,6 +602,7 @@ def methodManifoldExplore(L, P, dPdx, pplane):
                 print(f"ME {i+1}: improved solution with angle value={angleNew:.4g}.")
             beta = np.clip(beta * 2.0, -1.0, 1.0)
             foundBetter = True
+            if len(rhits) <= 2: break # not enough hits for ME
         else:
             if MANIFOLD_DEBUG_PRINT:
                 print(f"ME {i+1}: no improvement (angleOld={angleOld:.4g}, angleNew={angleNew:.4g}), reducing beta.")
@@ -627,7 +638,8 @@ fig.canvas.manager.set_window_title('Pytracer')
 ax = fig.add_axes([0.07, 0.1, 0.6, 0.8])  # main plot area (left)
 
 # Slider & control panel (pruned to used widgets)
-# Layout: stacked controls on the right side
+# Layout: stacked controls on the right side. Inserted two new checkboxes
+# for "Draw ME" and "Draw Model" below "Draw Guess" and adjust spacing.
 ax_sliders = [
     fig.add_axes([0.75, 0.95, 0.2, 0.03]),  # 0 C1.x
     fig.add_axes([0.75, 0.91, 0.2, 0.03]),  # 1 C1.y
@@ -636,14 +648,16 @@ ax_sliders = [
     fig.add_axes([0.75, 0.79, 0.2, 0.03]),  # 4 L1.y
     fig.add_axes([0.75, 0.75, 0.2, 0.03]),  # 5 Max Bounces
     fig.add_axes([0.75, 0.71, 0.2, 0.03]),  # 6 Draw Guess (checkbox)
-    fig.add_axes([0.75, 0.67, 0.2, 0.03]),  # 7 Draw Differentials (checkbox)
-    fig.add_axes([0.75, 0.63, 0.2, 0.03]),  # 8 Differential Scale (slider)
-    fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Draw Normals (checkbox)
-    fig.add_axes([0.75, 0.50, 0.2, 0.08]),  # 10 Lights (radio)
-    fig.add_axes([0.75, 0.42, 0.2, 0.08]),  # 11 Method (radio)
-    fig.add_axes([0.75, 0.39, 0.2, 0.03]),  # 12 Use N. Diff (checkbox)
-    fig.add_axes([0.75, 0.36, 0.2, 0.03]),  # 13 Monte Carlo (checkbox)
-    fig.add_axes([0.75, 0.32, 0.2, 0.03]),  # 14 RNG Seed (slider)
+    fig.add_axes([0.75, 0.67, 0.2, 0.03]),  # 7 Draw ME (checkbox)
+    fig.add_axes([0.75, 0.63, 0.2, 0.03]),  # 8 Draw Model (checkbox)
+    fig.add_axes([0.75, 0.59, 0.2, 0.03]),  # 9 Draw Differentials (checkbox)
+    fig.add_axes([0.75, 0.55, 0.2, 0.03]),  # 10 Differential Scale (slider)
+    fig.add_axes([0.75, 0.51, 0.2, 0.03]),  # 11 Draw Normals (checkbox)
+    fig.add_axes([0.75, 0.43, 0.2, 0.08]),  # 12 Lights (radio)
+    fig.add_axes([0.75, 0.35, 0.2, 0.08]),  # 13 Method (radio)
+    fig.add_axes([0.75, 0.31, 0.2, 0.03]),  # 14 Use N. Diff (checkbox)
+    fig.add_axes([0.75, 0.27, 0.2, 0.03]),  # 15 Monte Carlo (checkbox)
+    fig.add_axes([0.75, 0.23, 0.2, 0.03]),  # 16 RNG Seed (slider)
 ]
 
 slider_C1x = Slider(ax_sliders[0], "C1.x", -10.0, 10.0, valinit=C1[0])
@@ -656,30 +670,32 @@ slider_max_bounces = Slider(ax_sliders[5], "Max Bounces", 1, 10, valinit=max_bou
 
 # checkboxes (in ascending axis order)
 checkbox_draw_guess = CheckButtons(ax_sliders[6], ["Draw Guess"], [draw_guess])
-checkbox_draw_differentials = CheckButtons(ax_sliders[7], ["Draw Differentials"], [draw_differentials])
+checkbox_draw_me = CheckButtons(ax_sliders[7], ["Draw ME"], [draw_me])
+checkbox_draw_model = CheckButtons(ax_sliders[8], ["Draw Model"], [draw_model])
+checkbox_draw_differentials = CheckButtons(ax_sliders[9], ["Draw Differentials"], [draw_differentials])
 
 # differential scale
-slider_tangent_scale = Slider(ax_sliders[8], "Differential Scale", 0.001, 0.5, valinit=Ray.tangent_scale)
+slider_tangent_scale = Slider(ax_sliders[10], "Differential Scale", 0.001, 0.5, valinit=Ray.tangent_scale)
 
 # draw normals
-checkbox_draw_normals = CheckButtons(ax_sliders[9], ["Draw Normals"], [draw_normals])
+checkbox_draw_normals = CheckButtons(ax_sliders[11], ["Draw Normals"], [draw_normals])
 
 # method selection (radio)
-radio_lights = RadioButtons(ax_sliders[10], lights, active=selected_light)
-radio_methods = RadioButtons(ax_sliders[11], methods, active=selected_method)
+radio_lights = RadioButtons(ax_sliders[12], lights, active=selected_light)
+radio_methods = RadioButtons(ax_sliders[13], methods, active=selected_method)
 # other toggles
-checkbox_use_n_differentials = CheckButtons(ax_sliders[12], ["Use N Diff."], [Ray.use_normal_differential])
-checkbox_monte_carlo = CheckButtons(ax_sliders[13], ["Monte Carlo refr."], [monte_carlo])
+checkbox_use_n_differentials = CheckButtons(ax_sliders[14], ["Use N Diff."], [Ray.use_normal_differential])
+checkbox_monte_carlo = CheckButtons(ax_sliders[15], ["Monte Carlo refr."], [monte_carlo])
 
 # RNG seed slider
-slider_rng_seed = Slider(ax_sliders[14], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
+slider_rng_seed = Slider(ax_sliders[16], "RNG Seed", 0, 100, valinit=rng_seed, valstep=1)
 
 # ---------------------------------------------------------------
 # Slider callbacks
 # ---------------------------------------------------------------
 
 def update(val):
-    global C1, C1_angle, L1, max_bounces, draw_differentials, draw_guess, draw_normals, monte_carlo, rng_seed, selected_method, selected_light
+    global C1, C1_angle, L1, max_bounces, draw_differentials, draw_guess, draw_normals, draw_me, draw_model, monte_carlo, rng_seed, selected_method, selected_light
     C1[0] = slider_C1x.val
     C1[1] = slider_C1y.val
     C1_angle = slider_C1a.val
@@ -687,6 +703,8 @@ def update(val):
     L1[1] = slider_C0y.val
     max_bounces = int(slider_max_bounces.val)
     draw_guess = checkbox_draw_guess.get_status()[0]
+    draw_me = checkbox_draw_me.get_status()[0]
+    draw_model = checkbox_draw_model.get_status()[0]
     draw_differentials = checkbox_draw_differentials.get_status()[0]
     Ray.tangent_scale = slider_tangent_scale.val
     draw_normals = checkbox_draw_normals.get_status()[0]
@@ -701,7 +719,7 @@ def update(val):
 for s in [slider_C1x, slider_C1y, slider_C1a, slider_C0x, slider_C0y, slider_max_bounces, slider_tangent_scale, slider_rng_seed]:
     s.on_changed(update)
 
-for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_normals, checkbox_monte_carlo, checkbox_use_n_differentials, radio_lights, radio_methods]:
+for c in [checkbox_draw_differentials, checkbox_draw_guess, checkbox_draw_me, checkbox_draw_model, checkbox_draw_normals, checkbox_monte_carlo, checkbox_use_n_differentials, radio_lights, radio_methods]:
     c.on_clicked(update)
 
 # Initial draw

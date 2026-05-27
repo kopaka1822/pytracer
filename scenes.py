@@ -122,7 +122,7 @@ addBox(pool_scene, [-10, -10], [10, 10], ior=0.0)
 addWave(pool_scene, [-10, 0], [10, 0], amplitude=0.4, frequency=10.0, numSegments=256)
 
 # SET SCENE ---------------------------------------------- #
-planes = pool_scene
+planes = glass_globe_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None, TMin: float = 0.0, TMax: float = float('inf')) -> Hit | None:
     closest_hit = None
