@@ -26,9 +26,15 @@ max_bounces = 10
 #     C1 = np.array([-5.4, 3.5])
 #     max_bounces = 3
 if planes is glass_scene:
-     C1 = np.array([-6.8, -5.33])
-     C1_angle = 8.4
-     L1 = np.array([-8.2, 5.0])
+    # not working config
+    C1 = np.array([-6.8, -5.33])
+    C1_angle = 8.4
+    L1 = np.array([-8.2, 5.0])
+    # working config
+    C1 = np.array([-6.8, -1.3])
+    C1_angle = 3.6
+    L1 = np.array([-8.2, 3.7])
+
 # if planes is glass_globe_scene:
 #     C1 = np.array([-6.4, 2.4])
 #     C1_angle = -10.8
@@ -43,6 +49,10 @@ if planes is glass_globe_scene:
     C1 = np.array([-6.8, -2.27])
     C1_angle = 8.4
     L1 = np.array([-8.2, 5.0])
+if planes is lense_scene:
+    C1 = np.array([-6.8, -0.9])
+    C1_angle = 3.6
+    L1 = np.array([-8.2, 5])
 
 draw_differentials = True
 draw_guess = True
@@ -66,9 +76,8 @@ MANIFOLD_DEBUG_PRINT = False
 rng_seed = 0
 
 # labels
-LABEL_RAY = "C ray"
-LABEL_RAY2 = "L ray"
-LABEL_RAY_DIFF = "C ray diff"
+LABEL_RAY = "Camera Ray"
+LABEL_RAY_DIFF = "Camera Ray Diff"
 LABEL_P = "$P$"
 LABEL_P_OFFSET = 0.2 # xoffset 
 LABEL_C1 = "$C$"
@@ -88,7 +97,7 @@ def draw_scene():
     ax.set_ylim(-10, 10)
     ax.set_aspect('equal')
     ax.set_title(f"Caustics - {methods[selected_method]}")
-    ax.grid(True, linestyle="--", alpha=0.3)
+    #ax.grid(True, linestyle="--", alpha=0.3)
 
     # Draw finite planes
     for pl in planes:
@@ -407,11 +416,13 @@ def methodLightToPoint(P, L, hits, rayIn, phit):
         # draw ray model from startP to endP
         if draw_model:
             ax.plot([startP[0], endP[0]], [startP[1], endP[1]], color='green', linestyle='-', label=None)
-            ax.plot(endP[0], endP[1], marker='x', color='green')
+            ax.plot(endP[0], endP[1], marker='o', color='green')
             if draw_differentials:
                 ax.plot([startdP[0], enddP[0]], [startdP[1], enddP[1]], color='green', linestyle='--', label=None)
                 # also draw a tiny tick for the hit point
-                ax.plot(enddP[0], enddP[1], marker='x', color='green')
+                #ax.plot(enddP[0], enddP[1], marker='x', color='green')
+                # draw connection in light gray to the end point
+                #ax.plot([endP[0], enddP[0]], [endP[1], enddP[1]], color='gray', linestyle='-')
 
         lastTMin = maxT - hit.T() # update tmin
 

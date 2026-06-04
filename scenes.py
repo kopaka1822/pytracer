@@ -8,16 +8,16 @@ from hit import Hit
 # ---------------------------------------------------------------
 
 # adds the circle located at P with (2D) radius r.x r.y to the planes list
-def addCircle(planes, P, r, faceOutside, ior, numSegments=128):
+def addCircle(planes, P, r, faceOutside, ior, numSegments=128, percentage=1.0):
     for i in range(numSegments):
-        theta1 = (i / numSegments) * 2 * np.pi
-        theta2 = ((i + 1) / numSegments) * 2 * np.pi
-        theta0 = ((i - 1) / numSegments) * 2 * np.pi
-        theta3 = ((i + 2) / numSegments) * 2 * np.pi
-        p0 = P + r * np.array([np.cos(theta0), np.sin(theta0)])
-        p1 = P + r * np.array([np.cos(theta1), np.sin(theta1)])
-        p2 = P + r * np.array([np.cos(theta2), np.sin(theta2)])
-        p3 = P + r * np.array([np.cos(theta3), np.sin(theta3)])
+        theta1 = (i / numSegments) * 2 * np.pi * percentage
+        theta2 = ((i + 1) / numSegments) * 2 * np.pi * percentage
+        theta0 = ((i - 1) / numSegments) * 2 * np.pi * percentage
+        theta3 = ((i + 2) / numSegments) * 2 * np.pi * percentage
+        p0 = P - r * np.array([-np.sin(theta0), np.cos(theta0)])
+        p1 = P - r * np.array([-np.sin(theta1), np.cos(theta1)])
+        p2 = P - r * np.array([-np.sin(theta2), np.cos(theta2)])
+        p3 = P - r * np.array([-np.sin(theta3), np.cos(theta3)])
         if not faceOutside:
             planes.append(Plane(p1, p2, ior=ior, P0=p0, P3=p3))
         else:
@@ -121,8 +121,13 @@ pool_scene = []
 addBox(pool_scene, [-10, -10], [10, 10], ior=0.0)
 addWave(pool_scene, [-10, 0], [10, 0], amplitude=0.4, frequency=10.0, numSegments=256)
 
+lense_scene = []
+addBox(lense_scene, [-10, -10], [10, 10], ior=0.0)
+addCircle(lense_scene, [0, 3], [1.5, 3], faceOutside=True, ior=1.5, percentage=0.5)
+lense_scene.append(Plane([0, 0], [0, 6], ior=1.5))
+
 # SET SCENE ---------------------------------------------- #
-planes = glass_globe_scene
+planes = lense_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None, TMin: float = 0.0, TMax: float = float('inf')) -> Hit | None:
     closest_hit = None
