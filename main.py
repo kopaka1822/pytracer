@@ -52,7 +52,8 @@ if planes is glass_globe_scene:
 if planes is lense_scene:
     C1 = np.array([-6.8, -0.9])
     C1_angle = 3.6
-    L1 = np.array([-8.2, 5])
+    #L1 = np.array([-8.2, 5])
+    L1 = np.array([-8.2, 7])
 
 draw_differentials = True
 draw_guess = True
@@ -205,8 +206,10 @@ def draw_guess_and_diff(P, L, rayIn, phit):
         refEnd = rayRef.P() + rayRef.dP()
         ax.plot([refStart[0], refEnd[0]], [refStart[1], refEnd[1]], color='orange', linestyle='--', label=LABEL_DIRECT_DIFF)
 
-def draw_hits(hits, color, drawRay = True, drawDiff = True, rayLabel=None, diffLabel=None, initialdP=None, initialdD=None):
+def draw_hits(hits, color, drawRay = True, drawDiff = True, rayLabel=None, diffLabel=None, initialdP=None, initialdD=None, drawStartAndEndPoints=True):
     for hit in hits:
+        if not drawStartAndEndPoints and (hit == hits[0] or hit == hits[-1]):
+            continue
         ax.plot(hit.P()[0], hit.P()[1], marker='o', color=color)
 
     if drawRay:
@@ -644,7 +647,7 @@ def methodManifoldExplore(L, P, dPdx, pplane):
         dPdxFinal = computeDPDirLight(primaryDir, dPdx)
         dDdxFinal = np.zeros(2)
 
-    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff", initialdP=dPdxFinal, initialdD=dDdxFinal)
+    draw_hits(rhits, color='red', rayLabel="ME Ray", diffLabel="ME Ray Diff", initialdP=dPdxFinal, initialdD=dDdxFinal, drawStartAndEndPoints=False)
     #newDir = rhits[-2].P() - rhits[-1].P()
     #finalHits  traceLightToPoint(P, L, newDir, pplane)
     #return newDir / np.linalg.norm(newDir)
