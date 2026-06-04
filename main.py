@@ -156,13 +156,17 @@ def draw_scene():
         prevPlane = hit.Plane()
 
     # draw point P (always shown)
-    ax.plot(lastP[0], lastP[1], marker='o', color='deepskyblue')
-    ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='deepskyblue')
-    
+    ax.plot(lastP[0], lastP[1], marker='o', color='black')
+    ax.text(lastP[0]+LABEL_P_OFFSET, lastP[1]+0.2, LABEL_P, color='black')
+
     # get direct hits from P to L1 and plot them
     phit = hits[-1]
     hits = getDirectHits(lastP, L1, prevPlane)
     draw_hits(hits, color='orange', drawRay=False, drawDiff=False)
+
+    # draw direct connection from P to L1 (orange)
+    if draw_guess:
+        draw_guess_and_diff(lastP, L1, ray, phit)
 
     # draw manifold exploration result
     if draw_me:
@@ -172,10 +176,6 @@ def draw_scene():
         methodPointToLight(lastP, L1, hits, ray)
     if selected_method == 1:
         methodLightToPoint(lastP, L1, hits, ray, phit)
-
-    # draw direct connection from P to L1 (orange)
-    if draw_guess:
-        draw_guess_and_diff(lastP, L1, ray, phit)
 
     
 
