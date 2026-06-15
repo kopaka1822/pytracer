@@ -119,7 +119,7 @@ addCircle(glass_globe_scene, [0, 3], [3, 3], faceOutside=True, ior=1.5, numSegme
 
 pool_scene = []
 addBox(pool_scene, [-10, -10], [10, 10], ior=0.0)
-addWave(pool_scene, [-10, 0], [10, 0], amplitude=0.4, frequency=10.0, numSegments=256)
+addWave(pool_scene, [-10, -3], [10, -3], amplitude=1.0, frequency=4.0, numSegments=256)
 
 lense_scene = []
 addBox(lense_scene, [-10, -10], [10, 10], ior=0.0)
@@ -127,7 +127,7 @@ addCircle(lense_scene, [0, 3], [1.5, 3], faceOutside=True, ior=1.5, percentage=0
 lense_scene.append(Plane([0, 0], [0, 6], ior=1.5))
 
 # SET SCENE ---------------------------------------------- #
-planes = lense_scene
+planes = pool_scene
 
 def closestIntersect(ray: Ray, prevPlane: Plane | None = None, TMin: float = 0.0, TMax: float = float('inf')) -> Hit | None:
     closest_hit = None
